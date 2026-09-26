@@ -1,0 +1,108 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Tokens — טואטי בגארדה */
+:root {
+  --bg: 246 240 228;        /* קרם */
+  --surface: 255 252 245;
+  --surface-2: 239 231 214;
+  --ink: 38 36 30;
+  --muted: 112 104 88;
+  --line: 222 212 190;
+  --green: 47 107 58;       /* #2F6B3A ירוק טיולי */
+  --green-soft: 223 236 220;
+  --lake: 58 160 160;       /* טורקיז */
+  --terra: 194 87 58;       /* #C2573A טרקוטה — התראות ומפגש בלבד */
+  --terra-soft: 248 226 216;
+  --danger: 200 48 48;
+  --map-land: #EFE6D2;
+  --map-water: #8FCFCB;
+  --map-road: #FFFBF2;
+  --map-green: #DCE3C4;
+  --sheet-h: 0px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: 22 21 17;
+    --surface: 33 31 26;
+    --surface-2: 44 41 34;
+    --ink: 242 236 222;
+    --muted: 170 160 140;
+    --line: 62 58 48;
+    --green: 104 170 112;
+    --green-soft: 36 56 38;
+    --lake: 90 190 186;
+    --terra: 226 122 92;
+    --terra-soft: 66 38 30;
+    --danger: 240 96 96;
+    --map-land: #1E1D18;
+    --map-water: #1D4A4C;
+    --map-road: #3A372E;
+    --map-green: #232A1C;
+    color-scheme: dark;
+  }
+}
+
+html, body, #root { height: 100%; }
+body {
+  @apply bg-bg text-ink font-sans antialiased;
+  font-size: 16px;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+h1, h2, h3, .font-display { font-family: "Secular One", Assistant, system-ui, sans-serif; font-weight: 400; }
+button { -webkit-user-select: none; user-select: none; }
+.tnum { font-variant-numeric: tabular-nums; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
+.pt-safe { padding-top: var(--safe-top); }
+.pb-safe { padding-bottom: var(--safe-bottom); }
+
+@layer components {
+  .btn { @apply inline-flex items-center justify-center gap-2 min-h-[44px] px-4 rounded-2xl font-semibold transition active:scale-[0.97] disabled:opacity-50; }
+  .btn-primary { @apply btn bg-green text-white shadow-card; }
+  .btn-ghost { @apply btn bg-surface2 text-ink; }
+  .btn-icon { @apply inline-flex items-center justify-center w-11 h-11 rounded-full bg-surface text-ink shadow-float active:scale-95 transition; }
+  .card { @apply bg-surface rounded-3xl shadow-card; }
+  .section-title { @apply font-display text-lg text-ink; }
+  .input { @apply w-full min-h-[44px] rounded-xl border border-line bg-surface px-3 text-base text-ink outline-none focus:border-green; }
+  .label { @apply block text-sm font-semibold text-muted mb-1; }
+}
+
+/* Skeleton */
+.skeleton { @apply bg-surface2 rounded-xl; animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .5; } }
+
+/* Markers */
+.place-marker { display: flex; flex-direction: column; align-items: center; cursor: pointer; }
+.place-pin {
+  width: 38px; height: 38px; border-radius: 999px; display: grid; place-items: center;
+  background: rgb(var(--surface)); color: rgb(var(--green)); border: 2px solid rgb(var(--green));
+  box-shadow: 0 4px 12px -4px rgb(0 0 0 / .35); transition: transform .2s;
+}
+.place-marker.is-today .place-pin { background: rgb(var(--green)); color: #fff; border-color: #fff; }
+.place-marker.is-selected .place-pin { transform: scale(1.18); }
+.place-marker.is-rain { opacity: .75; }
+.place-label {
+  margin-top: 3px; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap;
+  background: rgb(var(--surface) / .92); color: rgb(var(--ink)); box-shadow: 0 1px 4px rgb(0 0 0 / .15);
+}
+
+/* Animations */
+@keyframes rise { from { transform: translateY(12px); opacity: 0; } to { transform: none; opacity: 1; } }
+.animate-rise { animation: rise .35s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes shake { 10%, 90% { transform: translateX(-2px); } 30%, 70% { transform: translateX(6px); } 50% { transform: translateX(-6px); } }
+.animate-shake { animation: shake .4s both; }
+@keyframes breathe { 0%, 100% { transform: scale(1); opacity: .55; } 50% { transform: scale(1.35); opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+.mapboxgl-ctrl-scale { background: rgb(var(--surface) / .8) !important; border-color: rgb(var(--muted)) !important; color: rgb(var(--ink)) !important; font-family: Assistant, sans-serif; }
+.mapboxgl-ctrl-attrib { font-size: 10px; }
+.mapboxgl-ctrl-top-left { top: calc(var(--safe-top) + 64px); }
