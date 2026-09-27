@@ -1,21 +1,18 @@
 // הקמה ופריסה אוטומטית מקצה לקצה. אפשר להריץ שוב ושוב (לא יוצר כפילויות).
 //
-// צריך שלושה משתני סביבה:
+// צריך משתנה סביבה אחד:
 //   SUPABASE_ACCESS_TOKEN  — supabase.com/dashboard/account/tokens
-//   VERCEL_TOKEN           — vercel.com/account/tokens
-//   MAPBOX_TOKEN           — הטוקן הציבורי (pk.) מ-account.mapbox.com
-// אופציונלי: GARDA_PIN (אחרת נוצר קוד אקראי ומודפס), VERCEL_TEAM_ID
+// אופציונלי: GARDA_PIN (אחרת נוצר קוד אקראי ומודפס)
+// הפריסה היא ל-GitHub Pages (scripts/deploy-pages.sh), והמפה חינמית בלי מפתח.
 //
 // שימוש: npm run setup
 import { execSync } from 'node:child_process'
-import { createHash, randomBytes, randomInt } from 'node:crypto'
-import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { randomBytes, randomInt } from 'node:crypto'
+import { readFileSync, writeFileSync } from 'node:fs'
 
 const NAME = 'tuati-garda'
-const { SUPABASE_ACCESS_TOKEN: SB, VERCEL_TOKEN: VC, MAPBOX_TOKEN: MB, VERCEL_TEAM_ID: TEAM } = process.env
-const missing = Object.entries({ SUPABASE_ACCESS_TOKEN: SB, VERCEL_TOKEN: VC, MAPBOX_TOKEN: MB }).filter(([, v]) => !v).map(([k]) => k)
-if (missing.length) { console.error('חסרים משתני סביבה:', missing.join(', ')); process.exit(1) }
+const SB = process.env.SUPABASE_ACCESS_TOKEN
+if (!SB) { console.error('חסר משתנה הסביבה SUPABASE_ACCESS_TOKEN'); process.exit(1) }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const log = (...a) => console.log('›', ...a)
@@ -23,8 +20,8 @@ const log = (...a) => console.log('›', ...a)
 async function http(base, token, method, path, body, extraHeaders = {}) {
   const r = await fetch(base + path, {
     method,
-    headers: { Authorization: `Bearer ${token}`, ...(body && !(body instanceof Buffer) ? { 'Content-Type': 'application/json' } : {}), ...extraHeaders },
-    body: body instanceof Buffer ? body : body ? JSON.stringify(body) : undefined,
+    headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}), ...extraHeaders },
+    body: body ? JSON.stringify(body) : undefined,
   })
   const text = await r.text()
   let json
@@ -32,7 +29,6 @@ async function http(base, token, method, path, body, extraHeaders = {}) {
   return { ok: r.ok, status: r.status, json }
 }
 const sb = (m, p, b) => http('https://api.supabase.com', SB, m, p, b)
-const vc = (m, p, b, h) => http('https://api.vercel.com', VC, m, p + (TEAM ? `${p.includes('?') ? '&' : '?'}teamId=${TEAM}` : ''), b, h)
 const must = (r, what) => { if (!r.ok) { console.error(`✗ ${what}: ${r.status}`, JSON.stringify(r.json)); process.exit(1) } return r.json }
 
 // ── 1. Supabase ─────────────────────────────────────────────
@@ -87,36 +83,11 @@ if (process.env.GARDA_PIN || !hasPin?.[0]?.ok) {
   await sql(`select private.set_pin('${pin}')`, 'הגדרת קוד')
 }
 
-// ── 2. בילד ─────────────────────────────────────────────────
-const env = { VITE_SUPABASE_URL: SUPABASE_URL, VITE_SUPABASE_ANON_KEY: ANON, VITE_MAPBOX_TOKEN: MB }
-writeFileSync('.env', Object.entries(env).map(([k, v]) => `${k}=${v}`).join('\n') + '\n')
-log('בונה…')
-execSync('npm run build', { stdio: 'inherit', env: { ...process.env, ...env, VITE_DEMO: '' } })
-
-// ── 3. Vercel ───────────────────────────────────────────────
-const proj = await vc('GET', `/v9/projects/${NAME}`)
-if (proj.status === 404) must(await vc('POST', '/v10/projects', { name: NAME, framework: null }), 'יצירת פרויקט Vercel')
-else must(proj, 'פרויקט Vercel')
-
-const walk = (d) => readdirSync(d).flatMap((f) => (statSync(join(d, f)).isDirectory() ? walk(join(d, f)) : [join(d, f)]))
-const files = [...walk('dist').map((f) => ({ path: relative('dist', f), buf: readFileSync(f) })), { path: 'vercel.json', buf: readFileSync('vercel.json') }]
-log(`מעלה ${files.length} קבצים ל-Vercel…`)
-for (const f of files) {
-  f.sha = createHash('sha1').update(f.buf).digest('hex')
-  must(await vc('POST', '/v2/files', f.buf, { 'x-vercel-digest': f.sha, 'Content-Type': 'application/octet-stream', 'Content-Length': String(f.buf.length) }), `העלאת ${f.path}`)
-}
-let dep = must(await vc('POST', '/v13/deployments', {
-  name: NAME, project: NAME, target: 'production',
-  files: files.map((f) => ({ file: f.path, sha: f.sha, size: f.buf.length })),
-  projectSettings: { framework: null },
-}), 'פריסה')
-while (!['READY', 'ERROR', 'CANCELED'].includes(dep.readyState)) {
-  await sleep(3000)
-  dep = must(await vc('GET', `/v13/deployments/${dep.id}`), 'מצב פריסה')
-}
-if (dep.readyState !== 'READY') { console.error('✗ הפריסה נכשלה:', dep.readyState); process.exit(1) }
-const url = `https://${(dep.alias ?? []).find((a) => a.startsWith(NAME)) ?? dep.alias?.[0] ?? dep.url}`
+// ── 2. בילד ופריסה ל-GitHub Pages ─────────────────────────
+writeFileSync('.env', `VITE_SUPABASE_URL=${SUPABASE_URL}\nVITE_SUPABASE_ANON_KEY=${ANON}\n`)
+log('בונה ופורס…')
+execSync('./scripts/deploy-pages.sh', { stdio: 'inherit' })
 
 console.log('\n✓ הכל מוכן')
-console.log('  קישור:', url)
+console.log('  קישור: https://elroitouati.github.io/Garda/')
 if (pin) console.log('  קוד משפחתי:', pin)

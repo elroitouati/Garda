@@ -1,31 +1,37 @@
 # טואטי בגארדה
 
 אפליקציית ווב (PWA) לטיול המשפחתי לאגם גארדה, 27.9–4.10.2026: מפה, לו"ז, מידע חיוני וכרטיס חירום.
-Vite, React, TypeScript, Tailwind, Supabase, Mapbox GL JS v3, Vercel.
+Vite, React, TypeScript, Tailwind, Supabase, MapLibre GL, GitHub Pages.
 
-## הדרך הקצרה: הקמה אוטומטית
+## הקמה: חשבון אחד בלבד
 
-צריך רק שלושה טוקנים כמשתני סביבה. כל השאר נעשה אוטומטית:
+- **האתר:** https://elroitouati.github.io/Garda/ (GitHub Pages, ענף `gh-pages`).
+- **המפה:** MapLibre עם אריחי OpenFreeMap ותבליט מ-AWS Terrain Tiles. חינמי, בלי חשבון ובלי מפתח.
+- **זמני נסיעה:** OSRM, גם הוא בלי מפתח.
+- **השרת:** Supabase, החשבון היחיד שצריך.
 
-| משתנה | מאיפה |
-|---|---|
-| `SUPABASE_ACCESS_TOKEN` | supabase.com/dashboard/account/tokens → Generate new token |
-| `VERCEL_TOKEN` | vercel.com/account/tokens → Create |
-| `MAPBOX_TOKEN` | account.mapbox.com → Default public token (מתחיל ב-`pk.`) |
+כדי לחבר את השרת צריך רק את `SUPABASE_ACCESS_TOKEN` (מ-supabase.com/dashboard/account/tokens) כמשתנה סביבה, ואז:
 
 ```bash
 npm run setup
 ```
 
-הסקריפט יוצר פרויקט Supabase, מריץ את הסכמה וה-seed, מפעיל כניסה אנונימית, קובע קוד משפחתי ומדפיס אותו, בונה ופורס ל-Vercel, ומדפיס את הקישור. אפשר להריץ אותו שוב בכל עדכון, והוא לא יוצר כפילויות.
+הסקריפט:
+1. יוצר פרויקט Supabase בפרנקפורט.
+2. מריץ את הסכמה וה-seed.
+3. מפעיל כניסה אנונימית.
+4. קובע קוד משפחתי ומדפיס אותו (או לוקח אותו מ-`GARDA_PIN`).
+5. בונה ופורס ל-GitHub Pages.
 
-## צ'ק-ליסט ידני (אם לא משתמשים בסקריפט)
+אפשר להריץ אותו שוב בכל עדכון, והוא לא יוצר כפילויות. לפריסה בלבד: `./scripts/deploy-pages.sh`.
+
+**עד שהשרת מחובר** האתר רץ במצב הדגמה (קוד 1234): לו"ז, מפה, כרטיס חירום ומידע חיוני עובדים. שינויי ניהול ותמונות נשמרים רק בטלפון שבו נעשו.
+
+## הקמה ידנית (אם לא משתמשים בסקריפט)
 
 | # | שירות | מה לעשות | לאן זה הולך |
 |---|---|---|---|
 | 1 | **Supabase** | פרויקט חדש (אזור `eu-central-1` / Frankfurt). ב-**Authentication → Sign In / Providers** להפעיל **Allow anonymous sign-ins**. | `VITE_SUPABASE_URL` ו-`VITE_SUPABASE_ANON_KEY` מ-**Project Settings → API** |
-| 2 | **Mapbox** | חשבון, ואז **Access tokens → Create token** עם ה-scopes הציבוריים בלבד. ב-URL restrictions להוסיף את הדומיין של Vercel (ו-`localhost` לפיתוח). | `VITE_MAPBOX_TOKEN` (מתחיל ב-`pk.`) |
-| 3 | **Vercel** | Import לריפו הזה מ-GitHub. Framework: Vite. להגדיר את שלושת המשתנים ב-**Settings → Environment Variables**. | משתני סביבה ב-Vercel |
 | 4 | **VAPID** (שלב 3) | `npx web-push generate-vapid-keys` | המפתח הציבורי ב-`VITE_VAPID_PUBLIC_KEY`; הפרטי רק ב-Supabase: `supabase secrets set VAPID_PRIVATE_KEY=...` |
 
 לפיתוח מקומי: להעתיק את `.env.example` ל-`.env` ולמלא. הקובץ `.env` לא נכנס ל-git.
@@ -62,7 +68,7 @@ npm install
 npm run dev        # מול Supabase אמיתי (לפי .env)
 npm run dev:demo   # מצב הדגמה בלי שרת. קוד: 1234. לא נכנס לבילד של production
 npm run build
-npm run geocode    # אימות קואורדינטות ה-seed מול Mapbox Geocoding
+npm run geocode    # אימות קואורדינטות ה-seed מול OpenStreetMap
 ```
 
 **שעון בדיקה:** מוסיפים לכתובת `?now=2026-09-28T11:20` כדי לראות איך האפליקציה נראית ברגע מסוים בטיול (שעון איטליה). `?now=real` מחזיר לשעון האמיתי.

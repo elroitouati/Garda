@@ -11,7 +11,7 @@ function Router() {
   if (phase === 'ready') return <MainScreen />
   return (
     <div className="grid h-full place-items-center bg-bg" aria-busy="true">
-      <img src="/favicon.svg" alt="טואטי בגארדה" className="h-20 w-20 animate-pulse rounded-[22px]" />
+      <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="טואטי בגארדה" className="h-20 w-20 animate-pulse rounded-[22px]" />
     </div>
   )
 }

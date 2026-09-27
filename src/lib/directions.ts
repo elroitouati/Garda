@@ -1,20 +1,17 @@
-import { MAPBOX_TOKEN } from './env'
 import type { Place } from './types'
 
-const KEY = 'garda-drive-v1'
+const KEY = 'garda-drive-v2'
 let cache: Record<string, number> = {}
 try { cache = JSON.parse(localStorage.getItem(KEY) || '{}') } catch { /* ignore */ }
 
-/** זמן נסיעה בדקות (Mapbox Directions, driving) */
+/** זמן נסיעה בדקות (OSRM, חינמי ובלי מפתח) */
 export async function driveMinutes(from: Place, to: Place): Promise<number | null> {
   if (from.id === to.id) return 0
   const k = `${from.id}>${to.id}`
   if (cache[k] != null) return cache[k]
-  if (!MAPBOX_TOKEN) return null
   try {
-    const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=false&access_token=${MAPBOX_TOKEN}`
-    const r = await fetch(url)
-    const j = await r.json()
+    const url = `https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=false`
+    const j = await (await fetch(url)).json()
     const sec = j?.routes?.[0]?.duration
     if (typeof sec !== 'number') return null
     cache[k] = Math.round(sec / 60)

@@ -85,7 +85,7 @@ export function PinScreen() {
   return (
     <main className="flex min-h-full flex-col items-center bg-bg px-6 pt-safe pb-safe">
       <div className="flex w-full max-w-sm flex-1 flex-col items-center justify-center animate-rise">
-        <img src="/favicon.svg" alt="" className="h-20 w-20 rounded-[22px] shadow-card" />
+        <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="h-20 w-20 rounded-[22px] shadow-card" />
         <h1 className="mt-5 text-[32px] leading-tight">טואטי בגארדה</h1>
         <p className="text-muted"><bdi>27.9 – 4.10.2026</bdi></p>
         <label htmlFor="pin-0" className="mt-10 flex items-center gap-2 text-[17px] font-semibold"><Lock size={18} /> הקוד המשפחתי</label>
