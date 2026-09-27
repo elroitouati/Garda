@@ -34,6 +34,7 @@ export interface Api {
   createMeeting(m: Omit<Meeting, 'id' | 'created_at' | 'active'>): Promise<void>
   cancelMeeting(id: string): Promise<void>
   savePush(memberId: string, sub: PushSubscriptionJSON): Promise<void>
+  setMyEmergencyPhone(phone: string): Promise<RpcResult>
 }
 
 function must<T>(r: { data: T | null; error: unknown }): T {
@@ -171,6 +172,11 @@ const realApi = (): Api => {
     },
     async savePush(memberId, sub) {
       must(await sb.from('push_subscriptions').upsert({ endpoint: sub.endpoint, member_id: memberId, p256dh: sub.keys?.p256dh, auth: sub.keys?.auth }))
+    },
+    async setMyEmergencyPhone(phone) {
+      const r = await sb.rpc('set_my_emergency_phone', { phone })
+      if (r.error) return { error: 'network' }
+      return r.data as RpcResult
     },
     subscribeLive(onChange) {
       const ch = sb.channel('live-changes')

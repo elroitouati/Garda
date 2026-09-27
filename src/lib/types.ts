@@ -69,6 +69,7 @@ export type Essential = {
 export type EmergencyContact = {
   id: string
   household_id: string
+  member_id?: string | null
   name: string
   name_latin: string | null
   role: string | null

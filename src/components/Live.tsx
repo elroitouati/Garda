@@ -261,3 +261,50 @@ export function MeetingPopup({ meeting, onShow, onClose }: { meeting: Meeting; o
     </div>
   )
 }
+
+// ── הטלפון שלי לכרטיס החירום ────────────────────────────────
+/** 050-1234567 → +972 50-123-4567 */
+function normalizePhone(v: string) {
+  let d = v.replace(/[^\d+]/g, '')
+  if (d.startsWith('00')) d = `+${d.slice(2)}`
+  else if (d.startsWith('0')) d = `+972${d.slice(1)}`
+  else if (!d.startsWith('+')) d = `+972${d}`
+  // נייד ישראלי: קריא יותר לעובד שמחייג
+  const il = d.match(/^\+972(5\d)(\d{3})(\d{4})$/)
+  return il ? `+972 ${il[1]}-${il[2]}-${il[3]}` : d
+}
+
+export function EmergencyPhonePrompt({ onDone, onLater }: { onDone: () => void; onLater: () => void }) {
+  const { api, me, refresh } = useStore()
+  const toast = useToast()
+  const [phone, setPhone] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const digits = phone.replace(/\D/g, '').length
+  const save = async () => {
+    if (!api) return
+    setBusy(true); setErr(null)
+    const r = await api.setMyEmergencyPhone(normalizePhone(phone))
+    setBusy(false)
+    if (r.ok) { await refresh(); toast('הטלפון נשמר בכרטיס החירום'); onDone() }
+    else setErr(r.error === 'bad_phone' ? 'המספר קצר מדי. בדוק שהקלדת את כל הספרות.' : 'לא הצלחתי לשמור. בדוק קליטה ונסה שוב.')
+  }
+  return (
+    <div className="fixed inset-0 z-[72] flex items-end bg-black/40">
+      <div className="w-full rounded-t-[28px] bg-surface p-6 pb-[calc(24px+var(--safe-bottom))] animate-rise">
+        <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-full bg-[#FBE3E3] text-danger dark:bg-[#4A2323]"><Shield size={30} /></div>
+        <h2 className="text-center text-2xl">{me?.name}, הטלפון שלך לכרטיס החירום</h2>
+        <p className="mt-2 text-center text-[16px] leading-relaxed text-muted">
+          אם אחד הילדים יתרחק, הוא יראה לעובד או לשוטר כרטיס באיטלקית עם המספר שלך, והם יוכלו להתקשר אליך מיד.
+        </p>
+        <label htmlFor="em-phone" className="label mt-5">מספר נייד</label>
+        <input id="em-phone" className="input tnum h-14 text-center text-2xl" dir="ltr" type="tel" inputMode="tel" autoComplete="tel"
+          placeholder="050-123-4567" value={phone} onChange={(e) => setPhone(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && digits >= 9) void save() }} />
+        <p className="mt-1.5 text-center text-[14px] text-muted">מספר ישראלי רגיל. הקידומת <bdi>+972</bdi> מתווספת לבד.</p>
+        {err && <p role="alert" className="mt-2 text-center font-semibold text-terra">{err}</p>}
+        <button className="btn-primary mt-5 w-full text-lg" disabled={busy || digits < 9} onClick={save}>{busy ? 'שומר…' : 'שמור בכרטיס החירום'}</button>
+        <button className="btn mt-2 w-full text-muted" onClick={onLater}>אחר כך</button>
+      </div>
+    </div>
+  )
+}

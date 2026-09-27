@@ -4,7 +4,7 @@ import { Avatar } from '../components/Avatar'
 import { BottomSheet, type Snap } from '../components/BottomSheet'
 import { Gallery } from '../components/Gallery'
 import { Welcome } from '../components/Welcome'
-import { FridayCard, LocationConsent, LocationHelp, MeetingCard, MeetingComposer, MeetingPopup, PushCard, ShabbatScreen, TipCard, useWalkingRoute } from '../components/Live'
+import { EmergencyPhonePrompt, FridayCard, LocationConsent, LocationHelp, MeetingCard, MeetingComposer, MeetingPopup, PushCard, ShabbatScreen, TipCard, useWalkingRoute } from '../components/Live'
 import { ComposeSheet, MessageHistory, MessagePopups } from '../components/Messages'
 import { MapView, type MapHandle, type MapMeeting, type MapPerson } from '../components/MapView'
 import { NextCard, NowRow } from '../components/NowNext'
@@ -53,6 +53,7 @@ export function MainScreen() {
   // ממשק המפה מתגלה רק אחרי מסך הפתיחה
   const [revealed, setRevealed] = useState(() => welcome === null)
   const [fabOpen, setFabOpen] = useState(false)
+  const [phoneLater, setPhoneLater] = useState(() => { try { return localStorage.getItem('garda-phone-later') === romeDate(new Date()) } catch { return false } })
   // הודעות, טיפים ובקשות קופצות רק אחרי שהמעבר למפה נגמר, כדי לא לשבור אותו
   const [settled, setSettled] = useState(revealed)
   useEffect(() => {
@@ -561,6 +562,13 @@ export function MainScreen() {
           }}
           onNo={() => loc.setConsent('no')}
         />
+      )}
+      {settled && !avatarPrompt && loc.consent !== null && !phoneLater && me &&
+        data.emergency.some((c) => c.member_id === me.id && !c.phone) && (
+        <EmergencyPhonePrompt onDone={() => setPhoneLater(true)} onLater={() => {
+          try { localStorage.setItem('garda-phone-later', romeDate(new Date())) } catch { /* ignore */ }
+          setPhoneLater(true)
+        }} />
       )}
       {compose && <ComposeSheet onClose={() => setCompose(false)} />}
       {cameraMenu && (

@@ -67,7 +67,7 @@ export function demoApi(): Api {
     days: s.days as never,
     activities: s.activities.map((x) => ({ id: id(), household_id: null, ...x })) as never,
     essentials: s.essentials.map((x) => ({ id: id(), ...x, fields: JSON.parse(x.fields as string) })) as never,
-    emergency: s.emergency_contacts.map((x) => ({ id: id(), ...x })) as never,
+    emergency: s.emergency_contacts.map((x) => ({ id: id(), member_id: x.name === 'יתיר' ? 'yatir' : x.name === 'שרון' ? 'sharon' : null, ...x })) as never,
     shabbat: { id: 1, title: 'שבת ושמיני עצרת', candles: '2026-10-02T18:36:00+02:00', havdalah: '2026-10-03T19:38:00+02:00' },
     fetchedAt: Date.now(),
   }
@@ -181,5 +181,13 @@ export function demoApi(): Api {
     },
     async cancelMeeting(mid) { live.meetings = live.meetings.filter((x) => x.id !== mid); emitLive() },
     async savePush() { /* אין שרת במצב הדגמה */ },
+    async setMyEmergencyPhone(phone) {
+      const me = localStorage.getItem('garda-demo-me')
+      const c = db.emergency.find((x) => x.member_id === me)
+      if (!c) return { error: 'not_contact' }
+      c.phone = phone
+      emit()
+      return { ok: true }
+    },
   }
 }
