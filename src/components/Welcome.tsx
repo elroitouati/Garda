@@ -103,7 +103,7 @@ export function Welcome({ full, onDone, onLocation }: {
   return (
     <div className={`welcome fixed inset-0 z-[68] flex flex-col overflow-hidden bg-bg ${leaving ? 'is-leaving' : ''}`} role="dialog" aria-modal="true" aria-label="ברוכים הבאים">
       {/* הפוסטר: מלא במסך הראשון, מצטמצם לרצועה בשלבים הבאים */}
-      <div className={`welcome-poster relative shrink-0 overflow-hidden transition-[height] duration-300 ${step === 'hero' ? 'h-[58dvh]' : 'h-[26dvh]'}`}>
+      <div className={`welcome-poster relative shrink-0 overflow-hidden transition-[height] duration-300 ${step === 'hero' ? 'h-[clamp(190px,40dvh,400px)]' : 'h-[clamp(110px,20dvh,210px)]'}`}>
         <GardaPoster className="absolute inset-0 h-full w-full" compact={step !== 'hero'} />
         <div className="absolute inset-x-0 top-0 flex items-center justify-between px-5 pt-[calc(var(--safe-top)+14px)]">
           <span className="rounded-full bg-surface/85 px-3 py-1 text-[13px] font-semibold text-ink backdrop-blur"><bdi>Lago di Garda · Italia</bdi></span>
@@ -111,11 +111,13 @@ export function Welcome({ full, onDone, onLocation }: {
         </div>
       </div>
 
-      <div className="welcome-body relative -mt-7 flex flex-1 flex-col rounded-t-[28px] bg-bg px-6 pt-7 pb-[calc(var(--safe-bottom)+20px)]">
+      <div className="welcome-body relative -mt-7 flex min-h-0 flex-1 flex-col rounded-t-[28px] bg-bg px-6 pt-6 pb-[calc(var(--safe-bottom)+16px)]">
+        {/* התוכן נגלל אם צריך; הכפתור תמיד נשאר גלוי למטה */}
+        <div className="-mx-6 flex min-h-0 flex-1 flex-col overflow-y-auto px-6">
         {step === 'hero' && (
           <div key="hero" className="flex flex-1 flex-col animate-rise">
             <p className="text-[15px] font-semibold text-terra"><bdi lang="it">{ITALIAN(hour)}</bdi> · {HEBREW(hour)}</p>
-            <h1 className="mt-1 text-[40px] leading-[1.1]">{me.name},<br />ברוכים הבאים לגארדה</h1>
+            <h1 className="mt-1 text-[clamp(28px,8.5vw,38px)] leading-[1.15]">{me.name},<br />ברוכים הבאים לגארדה</h1>
             <DayLine idx={idx} total={days.length} title={idx >= 0 ? days[idx].title : ''} date={idx >= 0 ? today : ''} daysToGo={daysToGo} />
           </div>
         )}
@@ -124,7 +126,7 @@ export function Welcome({ full, onDone, onLocation }: {
           <div key="how" className="flex flex-1 flex-col animate-rise">
             <h2 className="text-[28px] leading-tight">ככה זה עובד</h2>
             <p className="mt-1 text-muted">הכל על מפה אחת. ארבעה כפתורים שכדאי להכיר:</p>
-            <ul className="mt-5 space-y-4">
+            <ul className="mt-4 space-y-3">
               <How icon={<span className="grid h-12 w-12 place-items-center rounded-full bg-green text-white"><Camera size={22} /></span>} title="המצלמה" text="כל תמונה נכנסת לאלבום המשפחתי ומופיעה על המפה." />
               <How icon={<span className="grid h-12 w-12 place-items-center rounded-full bg-surface text-ink shadow-card"><MessageCircle size={22} /></span>} title="הודעה למשפחה" text='"אין תור פה, בואו!" או הודעה חשובה שכולם חייבים לראות.' />
               <How icon={<span className="grid h-12 w-12 place-items-center rounded-full bg-surface text-terra shadow-card"><MapPin size={22} /></span>} title="נקודת מפגש" text="סיכה על המפה ושעה, ולכולם יש מסלול הליכה אליה." />
@@ -163,8 +165,10 @@ export function Welcome({ full, onDone, onLocation }: {
           </div>
         )}
 
+        </div>
+
         {/* ניווט */}
-        <div className="mt-6">
+        <div className="shrink-0 pt-4">
           {steps.length > 1 && (
             <div className="mb-4 flex justify-center gap-2" aria-hidden>
               {steps.map((s) => <span key={s} className={`h-2 rounded-full transition-all duration-300 ${s === step ? 'w-6 bg-green' : 'w-2 bg-line'}`} />)}
@@ -195,7 +199,7 @@ export function Welcome({ full, onDone, onLocation }: {
 function DayLine({ idx, total, title, date, daysToGo }: { idx: number; total: number; title: string; date: string; daysToGo: number }) {
   if (idx >= 0) {
     return (
-      <div className="mt-5 flex items-center gap-3 rounded-2xl bg-surface p-4 shadow-card">
+      <div className="mt-4 flex items-center gap-3 rounded-2xl bg-surface p-3 shadow-card">
         <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-greenSoft font-display text-green">
           <span className="text-center leading-none"><span className="block text-[12px]">יום</span><span className="tnum block text-[24px]">{idx + 1}</span></span>
         </span>
