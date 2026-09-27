@@ -11,7 +11,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+      includeAssets: ['apple-touch-icon.png', 'hero.jpg'],
       manifest: {
         name: 'טואטי בגארדה',
         short_name: 'טואטי בגארדה',
@@ -22,8 +22,8 @@ export default defineConfig({
         scope: base,
         display: 'standalone',
         orientation: 'portrait',
-        background_color: '#F6F0E4',
-        theme_color: '#2F6B3A',
+        background_color: '#FAF5EA',
+        theme_color: '#1768B0',
         icons: [
           { src: 'pwa-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512.png', sizes: '512x512', type: 'image/png' },
