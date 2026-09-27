@@ -83,12 +83,17 @@ export function PinScreen() {
   }
 
   return (
-    <main className="flex min-h-full flex-col items-center bg-bg px-6 pt-safe pb-safe">
-      <div className="flex w-full max-w-sm flex-1 flex-col items-center justify-center animate-rise">
-        <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="h-20 w-20 rounded-[22px] shadow-card" />
-        <h1 className="mt-5 text-[32px] leading-tight">טואטי בגארדה</h1>
+    <main className="flex min-h-full flex-col items-center bg-bg pb-safe">
+      {/* הנוף מהלוגו כרקע עליון, והלוגו יושב על הקצה */}
+      <div className="relative h-[34dvh] min-h-[200px] w-full overflow-hidden">
+        <img src={`${import.meta.env.BASE_URL}hero.jpg`} alt="" className="absolute inset-0 h-full w-full object-cover" style={{ objectPosition: '45% 60%' }} />
+        <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-bg to-transparent" aria-hidden />
+      </div>
+      <div className="-mt-16 flex w-full max-w-sm flex-1 flex-col items-center px-6 animate-rise">
+        <img src={`${import.meta.env.BASE_URL}pwa-192.png`} alt="" className="h-28 w-28 rounded-[30px] shadow-card ring-4 ring-surface" />
+        <h1 className="mt-4 text-[32px] leading-tight">טואטי בגארדה</h1>
         <p className="text-muted"><bdi>27.9 – 4.10.2026</bdi></p>
-        <label htmlFor="pin-0" className="mt-10 flex items-center gap-2 text-[17px] font-semibold"><Lock size={18} /> הקוד המשפחתי</label>
+        <label htmlFor="pin-0" className="mt-8 flex items-center gap-2 text-[17px] font-semibold"><Lock size={18} /> הקוד המשפחתי</label>
         <div key={shake} className={`mt-3 flex gap-3 ${shake ? 'animate-shake' : ''}`} dir="ltr">
           {digits.map((d, i) => (
             <input

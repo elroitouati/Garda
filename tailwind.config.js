@@ -16,6 +16,8 @@ export default {
         terra: 'rgb(var(--terra) / <alpha-value>)',
         terraSoft: 'rgb(var(--terra-soft) / <alpha-value>)',
         danger: 'rgb(var(--danger) / <alpha-value>)',
+        lemon: 'rgb(var(--lemon) / <alpha-value>)',
+        olive: 'rgb(var(--olive) / <alpha-value>)',
       },
       fontFamily: {
         display: ['"Secular One"', 'Assistant', 'system-ui', 'sans-serif'],

@@ -108,7 +108,8 @@ export function Welcome({ full, onDone, onLeave, onLocation }: {
     <div className={`welcome fixed inset-0 z-[68] flex flex-col overflow-hidden bg-bg ${leaving ? 'is-leaving' : ''}`} role="dialog" aria-modal="true" aria-label="ברוכים הבאים">
       {/* הפוסטר: מלא במסך הראשון, מצטמצם לרצועה בשלבים הבאים */}
       <div className={`welcome-poster relative shrink-0 overflow-hidden transition-[height] duration-300 ${step === 'hero' ? 'h-[clamp(190px,40dvh,400px)]' : 'h-[clamp(110px,20dvh,210px)]'}`}>
-        <GardaPoster className="absolute inset-0 h-full w-full" compact={step !== 'hero'} />
+        <img src={`${import.meta.env.BASE_URL}hero.jpg`} alt="" className="absolute inset-0 h-full w-full object-cover" style={{ objectPosition: step === 'hero' ? '28% 55%' : '28% 70%' }} />
+          <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/15 to-transparent" aria-hidden />
         <div className="absolute inset-x-0 top-0 flex items-center justify-between px-5 pt-[calc(var(--safe-top)+14px)]">
           <span className="rounded-full bg-surface/85 px-3 py-1 text-[13px] font-semibold text-ink backdrop-blur"><bdi>Lago di Garda · Italia</bdi></span>
           <Avatar member={me} size={40} ring />

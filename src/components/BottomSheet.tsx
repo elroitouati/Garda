@@ -115,7 +115,7 @@ export function BottomSheet({ snap, onSnap, children, hidden = false }: Props) {
         style={{ touchAction: 'none' }}
         aria-label={['פתח את החלונית', 'הרחב למסך מלא', 'הקטן את החלונית'][snap]}
       >
-        <span className="h-[5px] w-11 rounded-full bg-line" />
+        <span className="tricolor h-[5px] w-12 rounded-full" />
       </button>
       <div
         ref={contentRef}

@@ -79,7 +79,7 @@ export function DayChips({ days, selected, today, weather, onSelect }: {
             <span className="mt-1 flex h-5 items-center gap-0.5 text-[13px] font-semibold">
               {w ? <><WeatherIcon code={w.code} size={15} /><bdi className="tnum">{w.max}°</bdi></> : <span className="opacity-40">—</span>}
             </span>
-            {d.date === today && <span className={`absolute -top-1 h-2.5 w-2.5 rounded-full ${sel ? 'bg-white' : 'bg-green'} ring-2 ring-surface`} aria-label="היום" />}
+            {d.date === today && <span className={`absolute -top-1 h-2.5 w-2.5 rounded-full ${sel ? 'bg-lemon' : 'bg-lemon'} ring-2 ring-surface`} aria-label="היום" />}
           </button>
         )
       })}

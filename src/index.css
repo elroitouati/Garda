@@ -4,23 +4,26 @@
 
 /* Tokens — טואטי בגארדה */
 :root {
-  --bg: 246 240 228;        /* קרם */
-  --surface: 255 252 245;
-  --surface-2: 239 231 214;
-  --ink: 38 36 30;
-  --muted: 112 104 88;
-  --line: 222 212 190;
-  --green: 47 107 58;       /* #2F6B3A ירוק טיולי */
-  --green-soft: 223 236 220;
-  --lake: 58 160 160;       /* טורקיז */
-  --terra: 194 87 58;       /* #C2573A טרקוטה — התראות ומפגש בלבד */
-  --terra-soft: 248 226 216;
-  --danger: 200 48 48;
-  --map-land: #EFE6D2;
-  --map-water: #8FCFCB;
-  --map-road: #FFFBF2;
-  --map-green: #DCE3C4;
-  --map-label: #6B6250;
+  /* Riviera — לפי הלוגו: שמיים ואגם כחולים, קרם של גלויה, טרקוטה של גגות, לימון וזית */
+  --bg: 250 245 234;        /* קרם גלויה */
+  --surface: 255 253 248;
+  --surface-2: 241 234 219;
+  --ink: 28 38 64;          /* כחול לילה, כמו המצלמה בלוגו */
+  --muted: 96 106 128;
+  --line: 225 216 196;
+  --green: 23 104 176;      /* פעולה ראשית: כחול אגם #1768B0 */
+  --green-soft: 226 239 251;
+  --lake: 64 158 222;
+  --terra: 211 72 56;       /* אדום-טרקוטה: התראות ומפגש */
+  --terra-soft: 252 228 222;
+  --danger: 200 40 40;
+  --lemon: 243 201 58;
+  --olive: 110 132 58;
+  --map-land: #F6EDD6;
+  --map-water: #6CB5E6;
+  --map-road: #FFFFFF;
+  --map-green: #D5E3B2;
+  --map-label: #5E6A80;
   --poster-sky-top: #F7D9B5;
   --poster-sky-bottom: #FBEEDC;
   --poster-sun: #E0764F;
@@ -40,23 +43,25 @@
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: 22 21 17;
-    --surface: 33 31 26;
-    --surface-2: 44 41 34;
-    --ink: 242 236 222;
-    --muted: 170 160 140;
-    --line: 62 58 48;
-    --green: 104 170 112;
-    --green-soft: 36 56 38;
-    --lake: 90 190 186;
-    --terra: 226 122 92;
-    --terra-soft: 66 38 30;
+    --bg: 14 21 36;
+    --surface: 23 32 52;
+    --surface-2: 33 44 68;
+    --ink: 240 236 226;
+    --muted: 160 170 190;
+    --line: 50 62 88;
+    --green: 52 128 204;
+    --green-soft: 28 48 78;
+    --lake: 96 180 236;
+    --terra: 236 118 96;
+    --terra-soft: 72 36 34;
     --danger: 240 96 96;
-    --map-land: #1E1D18;
-    --map-water: #1D4A4C;
-    --map-road: #3A372E;
-    --map-green: #232A1C;
-    --map-label: #B8AE98;
+    --lemon: 240 206 90;
+    --olive: 150 170 96;
+    --map-land: #1B2335;
+    --map-water: #1E4A72;
+    --map-road: #2E3A52;
+    --map-green: #1F2E2A;
+    --map-label: #A8B4C8;
     --poster-sky-top: #2B2A4A;
     --poster-sky-bottom: #8A5A5E;
     --poster-sun: #F0A060;
@@ -252,3 +257,6 @@ button { -webkit-user-select: none; user-select: none; }
 .fab-item { animation: fab-in .28s cubic-bezier(.34,1.56,.64,1) both; }
 @keyframes fab-in { from { opacity: 0; transform: translateY(14px) scale(.85); } }
 .tab-in { animation: fade-in .25s cubic-bezier(.2,0,0,1) both; }
+
+/* חתימה: סרט בצבעי איטליה על הידית של החלונית */
+.tricolor { background: linear-gradient(90deg, #2E9B4F 0 33.3%, #F8F6F0 33.3% 66.6%, #D93A3A 66.6%); box-shadow: 0 0 0 1px rgb(0 0 0 / .06); }
