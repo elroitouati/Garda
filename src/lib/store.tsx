@@ -146,7 +146,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     void loadLive(api)
     let t: ReturnType<typeof setTimeout> | undefined
     const off = api.subscribeLive(() => { clearTimeout(t); t = setTimeout(() => loadLive(api), 250) })
-    const poll = setInterval(() => { if (document.visibilityState === 'visible') void loadLive(api) }, 60000)
+    const poll = setInterval(() => { if (document.visibilityState === 'visible') void loadLive(api) }, 20000)
     return () => { clearTimeout(t); off(); clearInterval(poll) }
   }, [api, phase, loadLive])
 
