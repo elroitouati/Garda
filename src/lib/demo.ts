@@ -1,7 +1,7 @@
 // מצב הדגמה לפיתוח בלבד: קורא את ה-seed מה-SQL ומדמה את השרת בזיכרון. PIN: 1234
 import seedSql from '../../supabase/migrations/0002_seed.sql?raw'
 import type { Api } from './api'
-import type { LiveData, Message, TripData } from './types'
+import type { LiveData, Location, Message, TripData } from './types'
 
 function parseValues(src: string): unknown[][] {
   const rows: unknown[][] = []
@@ -68,6 +68,7 @@ export function demoApi(): Api {
     activities: s.activities.map((x) => ({ id: id(), household_id: null, ...x })) as never,
     essentials: s.essentials.map((x) => ({ id: id(), ...x, fields: JSON.parse(x.fields as string) })) as never,
     emergency: s.emergency_contacts.map((x) => ({ id: id(), ...x })) as never,
+    shabbat: { id: 1, title: 'שבת ושמיני עצרת', candles: '2026-10-02T18:36:00+02:00', havdalah: '2026-10-03T19:38:00+02:00' },
     fetchedAt: Date.now(),
   }
   const avatars: Record<string, string> = {}
@@ -75,7 +76,17 @@ export function demoApi(): Api {
   const emit = () => listeners.forEach((f) => f())
   const key = (t: string) => (t === 'emergency_contacts' ? 'emergency' : t) as keyof TripData
   const PIN = { v: '1234' }
-  const live: LiveData = { messages: [], reads: [], photos: [] }
+  // מיקומים מדומים סביב מוניגה, כדי לראות אוואטרים ובועות במצב הדגמה
+  const fake = (member_id: string, lat: number, lng: number, minAgo: number, sharing = true): Location =>
+    ({ member_id, lat, lng, accuracy: 15, heading: null, sharing, updated_at: new Date(Date.now() - minAgo * 60000).toISOString() })
+  const live: LiveData = {
+    messages: [], reads: [], photos: [], meetings: [],
+    locations: [
+      fake('yatir', 45.5212, 10.5391, 1), fake('sharon', 45.5214, 10.5385, 2), fake('shiilo', 45.5209, 10.5388, 0),
+      fake('etel', 45.5245, 10.5293, 4), fake('gil', 45.5362, 10.5357, 25), fake('eva', 45.5263, 10.5331, 1),
+      fake('efi', 45.4923, 10.6085, 3), fake('eyal', 45.4925, 10.6082, 6, false),
+    ],
+  }
   const liveListeners = new Set<() => void>()
   const emitLive = () => liveListeners.forEach((f) => f())
   // הודעה לדוגמה, כדי לראות את הגלויה במצב הדגמה
@@ -159,5 +170,16 @@ export function demoApi(): Api {
     },
     async deletePhoto(p) { live.photos = live.photos.filter((x) => x.id !== p.id); emitLive() },
     subscribeLive(fn) { liveListeners.add(fn); return () => liveListeners.delete(fn) },
+    async saveLocation(l) {
+      live.locations = live.locations.filter((x) => x.member_id !== l.member_id)
+      live.locations.push({ ...l, updated_at: new Date().toISOString() })
+      emitLive()
+    },
+    async createMeeting(m) {
+      live.meetings.unshift({ ...m, id: id(), active: true, created_at: new Date().toISOString() })
+      emitLive()
+    },
+    async cancelMeeting(mid) { live.meetings = live.meetings.filter((x) => x.id !== mid); emitLive() },
+    async savePush() { /* אין שרת במצב הדגמה */ },
   }
 }

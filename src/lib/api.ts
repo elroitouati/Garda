@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { LiveData, Message, Photo, TripData } from './types'
+import type { LiveData, Location, Meeting, Message, Photo, TripData } from './types'
 
 export type PickMember = { id: string; name: string; color: string; initials: string | null }
 export type RpcResult = { ok?: boolean; error?: string; members?: PickMember[] }
@@ -29,6 +29,11 @@ export interface Api {
   movePhoto(id: string, lat: number, lng: number): Promise<void>
   deletePhoto(p: Photo): Promise<void>
   subscribeLive(onChange: () => void): () => void
+  // מיקום, מפגש, Push
+  saveLocation(l: Omit<Location, 'updated_at'>): Promise<void>
+  createMeeting(m: Omit<Meeting, 'id' | 'created_at' | 'active'>): Promise<void>
+  cancelMeeting(id: string): Promise<void>
+  savePush(memberId: string, sub: PushSubscriptionJSON): Promise<void>
 }
 
 function must<T>(r: { data: T | null; error: unknown }): T {
@@ -82,10 +87,11 @@ const realApi = (): Api => {
         sb.from('essentials').select('*').order('sort'),
         sb.from('emergency_contacts').select('*').order('sort'),
       ])
+      const shabbat = await sb.from('shabbat').select('*').maybeSingle()
       return {
         households: must(households), members: must(members), places: must(places), days: must(days),
         activities: must(activities), essentials: must(essentials), emergency: must(emergency),
-        fetchedAt: Date.now(),
+        shabbat: shabbat.data ?? null, fetchedAt: Date.now(),
       }
     },
     async sign(bucket, paths) {
@@ -120,12 +126,14 @@ const realApi = (): Api => {
     },
     async fetchLive() {
       const since = new Date(Date.now() - 4 * 86400000).toISOString()
-      const [messages, reads, photos] = await Promise.all([
+      const [messages, reads, photos, locations, meetings] = await Promise.all([
         sb.from('messages').select('*').gte('created_at', since).order('created_at', { ascending: false }),
         sb.from('message_reads').select('*').gte('read_at', since),
         sb.from('photos').select('*').order('taken_at', { ascending: false }),
+        sb.from('locations').select('*'),
+        sb.from('meetings').select('*').eq('active', true).gte('meet_at', new Date(Date.now() - 3 * 3600_000).toISOString()).order('created_at', { ascending: false }),
       ])
-      return { messages: must(messages), reads: must(reads), photos: must(photos) }
+      return { messages: must(messages), reads: must(reads), photos: must(photos), locations: locations.data ?? [], meetings: meetings.data ?? [] }
     },
     async sendMessage(m) {
       must(await sb.from('messages').insert(m))
@@ -152,9 +160,21 @@ const realApi = (): Api => {
       must(await sb.from('photos').delete().eq('id', p.id))
       await sb.storage.from('photos').remove([p.path, p.thumb_path])
     },
+    async saveLocation(l) {
+      must(await sb.from('locations').upsert({ ...l, updated_at: new Date().toISOString() }))
+    },
+    async createMeeting(m) {
+      must(await sb.from('meetings').insert(m))
+    },
+    async cancelMeeting(id) {
+      must(await sb.from('meetings').update({ active: false }).eq('id', id))
+    },
+    async savePush(memberId, sub) {
+      must(await sb.from('push_subscriptions').upsert({ endpoint: sub.endpoint, member_id: memberId, p256dh: sub.keys?.p256dh, auth: sub.keys?.auth }))
+    },
     subscribeLive(onChange) {
       const ch = sb.channel('live-changes')
-      for (const table of ['messages', 'message_reads', 'photos'])
+      for (const table of ['messages', 'message_reads', 'photos', 'locations', 'meetings'])
         ch.on('postgres_changes', { event: '*', schema: 'public', table }, onChange)
       ch.subscribe()
       return () => { sb.removeChannel(ch) }

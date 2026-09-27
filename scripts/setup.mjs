@@ -8,6 +8,7 @@
 // שימוש: npm run setup
 import { execSync } from 'node:child_process'
 import { randomBytes, randomInt } from 'node:crypto'
+import webpush from 'web-push'
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 
 const NAME = 'tuati-garda'
@@ -91,8 +92,35 @@ if (process.env.GARDA_PIN || !hasPin?.[0]?.ok) {
   await sql(`select private.set_pin('${pin}')`, 'הגדרת קוד')
 }
 
+// ── Web Push: מפתחות VAPID, סוד לטריגר, ופריסת ה-Edge Function ──
+const cfg = Object.fromEntries((await sql(`select key, value from private.app_config`, 'הגדרות')).map((r) => [r.key, r.value]))
+const put = (k, v) => sql(`insert into private.app_config(key, value) values ('${k}', '${v}') on conflict (key) do update set value = excluded.value`, k)
+if (!cfg.vapid_public) {
+  const k = webpush.generateVAPIDKeys()
+  cfg.vapid_public = k.publicKey; cfg.vapid_private = k.privateKey
+  await put('vapid_public', k.publicKey); await put('vapid_private', k.privateKey)
+}
+if (!cfg.push_secret) { cfg.push_secret = randomBytes(24).toString('hex'); await put('push_secret', cfg.push_secret) }
+await put('push_url', `${SUPABASE_URL}/functions/v1/send-push`)
+must(await sb('POST', `/v1/projects/${ref}/secrets`, [
+  { name: 'VAPID_PUBLIC', value: cfg.vapid_public },
+  { name: 'VAPID_PRIVATE', value: cfg.vapid_private },
+  { name: 'PUSH_SECRET', value: cfg.push_secret },
+]), 'סודות ל-Edge Function')
+
+log('פורס את פונקציית ה-Push…')
+{
+  const form = new FormData()
+  form.append('metadata', JSON.stringify({ entrypoint_path: 'index.ts', name: 'send-push', verify_jwt: false }))
+  form.append('file', new Blob([readFileSync('supabase/functions/send-push/index.ts')], { type: 'application/typescript' }), 'index.ts')
+  const r = await fetch(`https://api.supabase.com/v1/projects/${ref}/functions/deploy?slug=send-push`, {
+    method: 'POST', headers: { Authorization: `Bearer ${SB}` }, body: form,
+  })
+  if (!r.ok) { console.error('✗ פריסת הפונקציה נכשלה:', r.status, await r.text()); process.exit(1) }
+}
+
 // ── 2. בילד ופריסה ל-GitHub Pages ─────────────────────────
-writeFileSync('.env', `VITE_SUPABASE_URL=${SUPABASE_URL}\nVITE_SUPABASE_ANON_KEY=${ANON}\n`)
+writeFileSync('.env', `VITE_SUPABASE_URL=${SUPABASE_URL}\nVITE_SUPABASE_ANON_KEY=${ANON}\nVITE_VAPID_PUBLIC_KEY=${cfg.vapid_public}\n`)
 log('בונה ופורס…')
 execSync('./scripts/deploy-pages.sh', { stdio: 'inherit' })
 

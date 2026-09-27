@@ -139,3 +139,51 @@ button { -webkit-user-select: none; user-select: none; }
   background: rgb(var(--green)); color: #fff; font-size: 12px; font-weight: 800; display: grid; place-items: center;
   box-shadow: 0 0 0 2px rgb(var(--surface)); transform: rotate(4deg);
 }
+
+/* בני משפחה על המפה */
+.person-marker { position: relative; display: grid; place-items: center; padding: 0; background: none; border: 0; cursor: pointer; }
+.pm-dot {
+  position: relative; display: grid; place-items: center; border-radius: 999px; overflow: hidden; color: #fff; font-weight: 800;
+  border: 3px solid rgb(var(--surface)); box-shadow: 0 4px 12px -3px rgb(0 0 0 / .45);
+}
+.pm-dot img { width: 100%; height: 100%; object-fit: cover; }
+.pm-ring { position: absolute; inset: -6px; border-radius: 999px; border: 3px solid var(--c); opacity: 0; pointer-events: none; }
+.person-marker.is-live .pm-ring { animation: breathe 2.4s ease-in-out infinite; }
+.person-marker.is-stale .pm-dot { opacity: .55; }
+.person-marker.is-paused .pm-dot { filter: grayscale(1); }
+.pm-kids {
+  position: absolute; bottom: -4px; inset-inline-start: -6px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px;
+  background: rgb(var(--ink)); color: rgb(var(--bg)); font-size: 11px; font-weight: 800; display: grid; place-items: center;
+}
+.pm-name {
+  position: absolute; top: calc(100% + 4px); white-space: nowrap; padding: 2px 9px; border-radius: 999px; font-size: 13px; font-weight: 700;
+  background: rgb(var(--ink)); color: rgb(var(--bg)); opacity: 0; transform: translateY(-4px); transition: .2s; pointer-events: none;
+}
+.pm-name.show { opacity: 1; transform: none; }
+.people-cluster {
+  display: flex; align-items: center; padding: 3px; border: 0; border-radius: 999px; cursor: pointer;
+  background: rgb(var(--surface)); box-shadow: 0 6px 16px -6px rgb(0 0 0 / .5);
+}
+.people-cluster .pm-dot { border-width: 2px; margin-inline-start: -10px; }
+.people-cluster .pm-dot:first-child { margin-inline-start: 0; }
+.pc-more { margin-inline: 4px 6px; font-size: 13px; font-weight: 800; color: rgb(var(--ink)); }
+
+/* אני: נקודה כחולה עם חרוט כיוון */
+.me-dot { position: relative; width: 22px; height: 22px; pointer-events: none; }
+.me-core { position: absolute; inset: 0; border-radius: 999px; background: #2F7BF5; border: 3px solid #fff; box-shadow: 0 0 0 6px rgb(47 123 245 / .2), 0 2px 6px rgb(0 0 0 / .3); }
+.me-cone {
+  position: absolute; left: 50%; top: 50%; width: 60px; height: 60px; margin: -30px 0 0 -30px; border-radius: 999px;
+  background: conic-gradient(from -30deg, rgb(47 123 245 / .35) 0deg 60deg, transparent 60deg);
+}
+
+/* נקודת מפגש */
+.meet-pin { display: flex; flex-direction: column; align-items: center; animation: pin-drop .7s cubic-bezier(.3, 1.5, .5, 1) both; }
+.mp-head {
+  width: 34px; height: 34px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: rgb(var(--terra));
+  border: 3px solid #fff; box-shadow: 0 6px 14px -4px rgb(0 0 0 / .5); order: 2;
+}
+.mp-label {
+  order: 1; margin-bottom: 6px; padding: 3px 10px; border-radius: 999px; background: rgb(var(--terra)); color: #fff;
+  font-weight: 800; font-size: 14px; white-space: nowrap; box-shadow: 0 4px 10px -4px rgb(0 0 0 / .4);
+}
+@keyframes pin-drop { from { transform: translateY(-220px); opacity: 0; } 70% { transform: translateY(6px); opacity: 1; } to { transform: none; } }

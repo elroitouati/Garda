@@ -84,6 +84,7 @@ export type TripData = {
   activities: Activity[]
   essentials: Essential[]
   emergency: EmergencyContact[]
+  shabbat: Shabbat | null
   fetchedAt: number
 }
 
@@ -117,4 +118,29 @@ export type Photo = {
   created_at: string
 }
 
-export type LiveData = { messages: Message[]; reads: MessageRead[]; photos: Photo[] }
+export type LiveData = { messages: Message[]; reads: MessageRead[]; photos: Photo[]; locations: Location[]; meetings: Meeting[] }
+
+export type Location = {
+  member_id: string
+  lat: number | null
+  lng: number | null
+  accuracy: number | null
+  heading: number | null
+  sharing: boolean
+  updated_at: string
+}
+
+export type Meeting = {
+  id: string
+  created_by: string
+  title: string
+  lat: number
+  lng: number
+  meet_at: string
+  audience: 'all' | 'household'
+  household_id: string | null
+  active: boolean
+  created_at: string
+}
+
+export type Shabbat = { id: number; title: string; candles: string; havdalah: string }

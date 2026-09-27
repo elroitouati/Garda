@@ -3,7 +3,8 @@ import { useState } from 'react'
 import { googleLink, wazeLink } from '../lib/nav'
 import type { Timed } from '../lib/schedule'
 import { hm, shortDate, weekdayLetter } from '../lib/time'
-import type { Day, Essential, Member, Place } from '../lib/types'
+import { ago, distance, formatDistance, isStale, type LatLng } from '../lib/geo'
+import type { Day, Essential, Location, Member, Place } from '../lib/types'
 import type { DayWeather } from '../lib/weather'
 import { Avatar } from './Avatar'
 import { PlaceIcon } from './PlaceIcon'
@@ -19,18 +20,31 @@ export function SectionTitle({ children, action }: { children: React.ReactNode; 
 }
 
 // ── המשפחה ──
-export function FamilyStrip({ members, meId, onTap }: { members: Member[]; meId: string | null; onTap: (m: Member) => void }) {
+export function FamilyStrip({ members, meId, locations, myPos, onTap }: {
+  members: Member[]; meId: string | null; locations: Location[]; myPos: LatLng | null; onTap: (m: Member) => void
+}) {
   const sorted = [...members].sort((a, b) => (a.id === meId ? -1 : b.id === meId ? 1 : a.sort - b.sort))
   if (!members.length) return <p className="px-5 text-muted">עוד אין משתתפים. מנהל יכול להוסיף במסך הניהול.</p>
+  const status = (m: Member) => {
+    const l = locations.find((x) => x.member_id === (m.guardian_id ?? m.id))
+    if (m.guardian_id) return { text: `עם ${members.find((x) => x.id === m.guardian_id)?.name ?? 'מבוגר'}`, dim: !l }
+    if (!l || l.lat == null || l.lng == null) return { text: 'לא משתף', dim: true }
+    if (!l.sharing) return { text: 'מושהה', dim: true, grey: true }
+    const d = myPos && m.id !== meId ? ` · ${formatDistance(distance(myPos, { lat: l.lat, lng: l.lng }))}` : ''
+    return { text: `${ago(l.updated_at)}${d}`, dim: isStale(l.updated_at) }
+  }
   return (
     <div className="no-scrollbar flex gap-3 overflow-x-auto px-5 pb-1" style={{ touchAction: 'pan-x' }}>
-      {sorted.map((m) => (
-        <button key={m.id} className="flex w-[68px] shrink-0 flex-col items-center gap-1 text-center" onClick={() => onTap(m)}>
-          <Avatar member={m} size={52} ring={m.id === meId} />
-          <span className="w-full truncate text-[14px] font-semibold leading-tight">{m.id === meId ? 'אני' : m.name}</span>
-          <span className="w-full truncate text-[12px] leading-tight text-muted">{m.guardian_id ? 'עם מבוגר' : 'לא משתף'}</span>
-        </button>
-      ))}
+      {sorted.map((m) => {
+        const st = status(m)
+        return (
+          <button key={m.id} className="flex w-[76px] shrink-0 flex-col items-center gap-1 text-center" onClick={() => onTap(m)}>
+            <Avatar member={m} size={52} ring={m.id === meId} dim={'grey' in st && st.grey} className={st.dim ? 'opacity-60' : ''} />
+            <span className="w-full truncate text-[14px] font-semibold leading-tight">{m.id === meId ? 'אני' : m.name}</span>
+            <span className="tnum w-full truncate text-[12px] leading-tight text-muted">{st.text}</span>
+          </button>
+        )
+      })}
     </div>
   )
 }

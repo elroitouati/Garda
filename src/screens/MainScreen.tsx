@@ -1,20 +1,27 @@
-import { Camera, Check, Crosshair, ImagePlus, Images, MapPin, MessageCircle, Minus, Navigation, Plus, Shield, Umbrella, WifiOff, X } from 'lucide-react'
+import { Camera, Check, Crosshair, ImagePlus, Images, MapPin, MessageCircle, Minus, Navigation, Plus, Shield, Umbrella, Users, WifiOff, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Avatar } from '../components/Avatar'
 import { BottomSheet, type Snap } from '../components/BottomSheet'
 import { Gallery } from '../components/Gallery'
+import { FridayCard, LocationConsent, LocationHelp, MeetingCard, MeetingComposer, MeetingPopup, PushCard, ShabbatScreen, TipCard, useWalkingRoute } from '../components/Live'
 import { ComposeSheet, MessageHistory, MessagePopups } from '../components/Messages'
-import { MapView, type MapHandle } from '../components/MapView'
+import { MapView, type MapHandle, type MapMeeting, type MapPerson } from '../components/MapView'
 import { NextCard, NowRow } from '../components/NowNext'
 import { PlaceIcon } from '../components/PlaceIcon'
 import { DayChips, Essentials, FamilyStrip, RainPlan, SectionTitle, Timeline } from '../components/Sections'
 import { useToast } from '../components/Toast'
+import { distance, isLive, isStale } from '../lib/geo'
+import { useLocationSharing } from '../lib/location'
+import { initialsOf } from '../lib/members'
 import { unlockAudio } from '../lib/messages'
+import { syncPush } from '../lib/push'
+import { shabbatPhase } from '../lib/shabbat'
+import { TIPS } from '../lib/tips'
 import { googleLink, wazeLink } from '../lib/nav'
 import { preparePhoto } from '../lib/photos'
 import { myActivities, useNow } from '../lib/schedule'
 import { useStore } from '../lib/store'
-import { isFakeNow, romeDate, shortDate, weekdayLetter } from '../lib/time'
+import { isFakeNow, now, romeDate, shortDate, weekdayLetter } from '../lib/time'
 import type { Photo, Place } from '../lib/types'
 import { fetchWeather, type DayWeather } from '../lib/weather'
 import { AvatarSetup } from './AvatarSetup'
@@ -22,7 +29,7 @@ import { EmergencyCard } from './EmergencyCard'
 import { Settings } from './Settings'
 
 export function MainScreen() {
-  const { data, me, meId, offline, loadError, refresh, live, api, photoUrl, signPhotos, refreshLive } = useStore()
+  const { data, me, meId, offline, loadError, refresh, live, api, photoUrl, signPhotos, refreshLive, avatarUrl } = useStore()
   const toast = useToast()
   const t = useNow(1000)
   const today = romeDate(t)
@@ -38,6 +45,13 @@ export function MainScreen() {
   const [gallery, setGallery] = useState<{ ids: string[] | null; start: number } | null>(null)
   const [placing, setPlacing] = useState<Photo | null>(null)
   const [uploads, setUploads] = useState<{ done: number; total: number; failed: number } | null>(null)
+  const [filter, setFilter] = useState<'all' | 'mine'>('all')
+  const [meetDraft, setMeetDraft] = useState(false)
+  const [locHelpHidden, setLocHelpHidden] = useState(false)
+  const [tip, setTip] = useState<{ title: string; body: string } | null>(null)
+  const [seenMeetings, setSeenMeetings] = useState<Set<string>>(() => { try { return new Set(JSON.parse(localStorage.getItem('garda-meet-seen') || '[]')) } catch { return new Set() } })
+  const phase = shabbatPhase(data?.shabbat, t)
+  const loc = useLocationSharing(phase === 'shabbat')
   const camRef = useRef<HTMLInputElement>(null)
   const galRef = useRef<HTMLInputElement>(null)
 
@@ -112,7 +126,78 @@ export function MainScreen() {
     firstFit.current = true
     const id = setTimeout(fitDay, delay)
     return () => clearTimeout(id)
-  }, [day, data?.fetchedAt]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [day, !!data]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { if (api && me) void syncPush(api, me.id) }, [api, me?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── בני המשפחה על המפה ──
+  const people = useMemo<MapPerson[]>(() => {
+    if (!data || !me) return []
+    const byId = new Map(data.members.map((m) => [m.id, m]))
+    const out: MapPerson[] = []
+    for (const l of live.locations) {
+      const m = byId.get(l.member_id)
+      if (!m || !m.active || l.lat == null || l.lng == null) continue
+      if (filter === 'mine' && m.household_id !== me.household_id) continue
+      const isMe = m.id === me.id
+      const pos = isMe && loc.pos ? loc.pos : { lat: l.lat, lng: l.lng }
+      if (isMe && !loc.pos) continue
+      out.push({
+        id: m.id, name: m.name, color: m.color, initials: initialsOf(m), avatar: avatarUrl(m), lat: pos.lat, lng: pos.lng,
+        live: isMe || isLive(l.updated_at), stale: !isMe && isStale(l.updated_at), paused: !l.sharing, isMe,
+        heading: isMe ? loc.pos?.heading ?? null : null,
+        kids: data.members.filter((k) => k.guardian_id === m.id && k.active).map((k) => k.name),
+      })
+    }
+    if (loc.pos && !out.some((p) => p.isMe)) out.push({ id: me.id, name: me.name, color: me.color, initials: initialsOf(me), avatar: null, lat: loc.pos.lat, lng: loc.pos.lng, live: true, stale: false, paused: false, isMe: true, heading: loc.pos.heading, kids: [] })
+    return out
+  }, [data, me, live.locations, loc.pos, filter, avatarUrl])
+
+  const fitPeople = () => {
+    const pts = people.filter((p) => !p.stale || p.isMe)
+    if (pts.length) mapRef.current?.fit(pts, { maxZoom: 16 })
+    else toast('עוד אף אחד לא משתף מיקום')
+  }
+  // בפתיחה: אם יש משתתפים שמשתפים מיקום, מתמקדים בהם
+  const peopleFit = useRef(false)
+  useEffect(() => {
+    if (peopleFit.current || !people.some((p) => !p.isMe && !p.stale)) return
+    peopleFit.current = true
+    setTimeout(fitPeople, 700)
+  }, [people]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── נקודת מפגש ──
+  const meeting = useMemo(() => live.meetings.find((m) => m.active && new Date(m.meet_at).getTime() > now().getTime() - 20 * 60000) ?? null, [live.meetings])
+  const walk = useWalkingRoute(loc.pos, meeting)
+  const mapMeeting = useMemo<MapMeeting | null>(() => meeting ? { key: meeting.id, title: meeting.title, lat: meeting.lat, lng: meeting.lng, route: walk?.coords ?? null } : null, [meeting, walk])
+  const newMeeting = meeting && meeting.created_by !== me?.id && !seenMeetings.has(meeting.id) ? meeting : null
+  const markMeetingSeen = (id: string) => setSeenMeetings((s) => {
+    const n = new Set(s).add(id)
+    try { localStorage.setItem('garda-meet-seen', JSON.stringify([...n].slice(-30))) } catch { /* ignore */ }
+    return n
+  })
+  const startMeeting = (at?: { lat: number; lng: number }) => {
+    setSelectedPlace(null); setSnap(0); setMeetDraft(true)
+    if (at) mapRef.current?.flyTo(at, 16)
+  }
+
+  // ── טיפים לפי מיקום: פעם ביום לכל מקום ──
+  useEffect(() => {
+    if (!loc.pos || !data || phase === 'shabbat') return
+    const key = `garda-tips-${romeDate(new Date())}`
+    let shown: string[] = []
+    try { shown = JSON.parse(localStorage.getItem(key) || '[]') } catch { /* ignore */ }
+    for (const [pid, tips] of Object.entries(TIPS)) {
+      if (shown.includes(pid)) continue
+      const place = data.places.find((p) => p.id === pid)
+      if (!place || !tips.length) continue
+      const t0 = tips[new Date().getDate() % tips.length]
+      if (distance(loc.pos, place) > (t0.radius ?? 400)) continue
+      setTip({ title: t0.title, body: t0.body })
+      try { localStorage.setItem(key, JSON.stringify([...shown, pid])) } catch { /* ignore */ }
+      break
+    }
+  }, [loc.pos?.lat, loc.pos?.lng]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const focusPlace = (id: string) => {
     const p = data?.places.find((x) => x.id === id)
@@ -142,10 +227,20 @@ export function MainScreen() {
 
   const rainyDay = weather[day] && weather[day].rain >= 50
 
+  if (phase === 'shabbat') {
+    return (
+      <>
+        <ShabbatScreen onEmergency={() => setOverlay('emergency')} />
+        {overlay === 'emergency' && <EmergencyCard onClose={() => setOverlay(null)} />}
+      </>
+    )
+  }
+
   return (
     <main className="fixed inset-0 overflow-hidden bg-bg">
       <MapView ref={mapRef} places={visiblePlaces} highlight={dayPlaceIds} selectedId={selectedPlace?.id ?? null} onSelect={setSelectedPlace} bottomPadding={snap === 0 ? 130 : Math.round(window.innerHeight * 0.52)}
-        photos={placing ? photos.filter((p) => p.id !== placing.id) : photos} thumbUrl={photoUrl} onPhotos={(ids) => setGallery({ ids, start: 0 })} />
+        photos={placing ? photos.filter((p) => p.id !== placing.id) : photos} thumbUrl={photoUrl} onPhotos={(ids) => setGallery({ ids, start: 0 })}
+        people={people} meeting={mapMeeting} onLongPress={(p) => { if (!meetDraft && !placing) startMeeting(p) }} />
 
       {/* כותרת עליונה */}
       <header className={`pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start gap-2 px-3 pt-[calc(var(--safe-top)+10px)] transition-opacity duration-300 ${snap === 2 ? 'opacity-0' : ''}`}>
@@ -180,10 +275,38 @@ export function MainScreen() {
         <button className="btn-icon" onClick={() => mapRef.current?.zoomBy(1)} aria-label="התקרב"><Plus size={22} /></button>
         <button className="btn-icon" onClick={() => mapRef.current?.zoomBy(-1)} aria-label="התרחק"><Minus size={22} /></button>
         <button className="btn-icon text-green" onClick={fitDay} aria-label="הצג את כל המקומות של היום"><Crosshair size={21} /></button>
+        <button className="btn-icon text-green" onClick={fitPeople} aria-label="הצג את כולם"><Users size={21} /></button>
+        <button className="btn-icon text-terra" onClick={() => startMeeting()} aria-label="קבע נקודת מפגש"><MapPin size={21} /></button>
       </div>
 
+      {/* סינון: כולם / המשפחה שלי */}
+      {data.households.length > 1 && snap !== 2 && !meetDraft && !placing && (
+        <div className="absolute start-3 z-20 flex rounded-full bg-surface/95 p-1 shadow-float" style={{ top: 'calc(var(--safe-top) + 66px)' }} role="radiogroup" aria-label="סינון">
+          {([['all', 'כולם'], ['mine', 'המשפחה שלי']] as const).map(([k, l]) => (
+            <button key={k} role="radio" aria-checked={filter === k} onClick={() => setFilter(k)} className={`min-h-[36px] rounded-full px-3 text-[14px] font-semibold ${filter === k ? 'bg-green text-white' : 'text-muted'}`}>{l}</button>
+          ))}
+        </div>
+      )}
+
+      {/* קביעת נקודת מפגש: מזיזים את המפה מתחת לסיכה */}
+      {meetDraft && (
+        <>
+          <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center" style={{ paddingBottom: 'var(--sheet-h)' }}>
+            <div className="meet-pin" style={{ transform: 'translateY(-22px)' }}><span className="mp-head" /></div>
+          </div>
+          <MeetingComposer onCancel={() => setMeetDraft(false)} onSave={async (title, at) => {
+            const c = mapRef.current?.visibleCenter()
+            if (!c || !api || !me) return
+            try {
+              await api.createMeeting({ created_by: me.id, title, lat: c.lat, lng: c.lng, meet_at: at.toISOString(), audience: 'all', household_id: null })
+              await refreshLive(); setMeetDraft(false); setSnap(1); toast('נקודת המפגש נשלחה לכולם')
+            } catch { toast('לא הצלחתי לשלוח. בדוק קליטה.') }
+          }} />
+        </>
+      )}
+
       {/* מצלמה והודעה — בצד השני של המפה */}
-      {!selectedPlace && !placing && (
+      {!selectedPlace && !placing && !meetDraft && (
         <div className="absolute start-3 z-20 flex flex-col items-center gap-2.5 transition-[bottom,opacity] duration-300"
           style={{ bottom: 'calc(var(--sheet-h) + 14px)', opacity: snap === 2 ? 0 : 1 }}>
           <button className="btn-icon h-12 w-12" onClick={() => setCompose(true)} aria-label="הודעה למשפחה"><MessageCircle size={22} /></button>
@@ -213,7 +336,7 @@ export function MainScreen() {
             <p className="mb-2 text-center font-semibold">הזז את המפה עד שהתמונה במקום הנכון</p>
             <div className="flex gap-2">
               <button className="btn-primary flex-1" onClick={async () => {
-                const c = mapRef.current?.center()
+                const c = mapRef.current?.visibleCenter()
                 if (!c || !api) return
                 try { await api.movePhoto(placing.id, c.lat, c.lng); await refreshLive(); toast('המיקום נשמר') } catch { toast('לא הצלחתי לשמור. בדוק קליטה.') }
                 setPlacing(null)
@@ -246,9 +369,16 @@ export function MainScreen() {
 
       <BottomSheet snap={snap} onSnap={setSnap}>
         <NowRow list={list} t={t} onPlace={focusPlace} />
+        {phase === 'friday' && <FridayCard />}
+        {meeting && (
+          <MeetingCard meeting={meeting} walk={walk} canCancel={meeting.created_by === me?.id || !!me?.is_admin}
+            onShow={() => { setSnap(0); mapRef.current?.fit([meeting, ...people.filter((p) => !p.stale)], { maxZoom: 17 }) }}
+            onCancel={async () => { if (!confirm('לבטל את נקודת המפגש?')) return; try { await api?.cancelMeeting(meeting.id); await refreshLive(); toast('נקודת המפגש בוטלה') } catch { toast('לא הצלחתי לבטל') } }} />
+        )}
         <NextCard list={list} t={t} />
 
         <SectionTitle action={<button className="min-h-[44px] px-1 text-[15px] font-semibold text-green" onClick={() => setCompose(true)}>הודעה חדשה</button>}>הודעות היום</SectionTitle>
+        <PushCard onInstall={() => setOverlay('settings')} />
         <MessageHistory onCompose={() => setCompose(true)} />
 
         <SectionTitle action={photos.length > 0 && <button className="min-h-[44px] px-1 text-[15px] font-semibold text-green" onClick={() => setGallery({ ids: null, start: 0 })}>כל {photos.length} התמונות</button>}>האלבום</SectionTitle>
@@ -273,8 +403,22 @@ export function MainScreen() {
           </div>
         )}
 
-        <SectionTitle>המשפחה</SectionTitle>
-        <FamilyStrip members={familyMembers} meId={meId} onTap={(m) => toast(`המיקום של ${m.name} יופיע כשנפעיל שיתוף מיקום`)} />
+        <SectionTitle action={
+          <label className="flex min-h-[44px] items-center gap-2 text-[15px] font-semibold">
+            <span className={loc.sharing ? 'text-green' : 'text-muted'}>{loc.sharing ? 'משתף מיקום' : 'מיקום מושהה'}</span>
+            <input type="checkbox" role="switch" className="h-6 w-6 accent-[rgb(var(--green))]" checked={loc.sharing} onChange={async (e) => {
+              const on = e.target.checked
+              if (on) navigator.geolocation?.getCurrentPosition(() => {}, () => {}, { timeout: 1 })
+              try { await loc.setSharing(on); await refreshLive() } catch { toast('לא הצלחתי לעדכן. בדוק קליטה.') }
+            }} />
+          </label>
+        }>המשפחה</SectionTitle>
+        {(loc.state === 'denied' || loc.state === 'unavailable') && !locHelpHidden && <LocationHelp state={loc.state} onClose={() => setLocHelpHidden(true)} />}
+        <FamilyStrip members={familyMembers} meId={meId} locations={live.locations} myPos={loc.pos} onTap={(m) => {
+          const p = people.find((x) => x.id === m.id)
+          if (p) { setSnap(0); mapRef.current?.flyTo(p, 16) }
+          else toast(`${m.name} עוד לא משתף מיקום`)
+        }} />
 
         <SectionTitle>ימי הטיול</SectionTitle>
         <DayChips days={data.days} selected={day} today={today} weather={weather} onSelect={(d) => { setSelectedDay(d); setSelectedPlace(null) }} />
@@ -300,6 +444,19 @@ export function MainScreen() {
       </BottomSheet>
 
       <MessagePopups onShowOnMap={(lat, lng) => { setSnap(0); mapRef.current?.flyTo({ lat, lng }, 16) }} />
+      {newMeeting && <MeetingPopup meeting={newMeeting} onClose={() => markMeetingSeen(newMeeting.id)}
+        onShow={() => { markMeetingSeen(newMeeting.id); setSnap(0); mapRef.current?.fit([newMeeting, ...people.filter((p) => p.isMe)], { maxZoom: 17 }) }} />}
+      {tip && <TipCard title={tip.title} body={tip.body} onClose={() => setTip(null)} />}
+      {loc.consent === null && !avatarPrompt && (
+        <LocationConsent
+          onYes={() => {
+            // הבקשה יוצאת מתוך הלחיצה עצמה (דרישה של iOS)
+            navigator.geolocation?.getCurrentPosition(() => {}, () => {}, { enableHighAccuracy: true, timeout: 20000 })
+            loc.setConsent('yes')
+          }}
+          onNo={() => loc.setConsent('no')}
+        />
+      )}
       {compose && <ComposeSheet onClose={() => setCompose(false)} />}
       {cameraMenu && (
         <div className="fixed inset-0 z-[75] flex items-end bg-black/40" onClick={() => setCameraMenu(false)}>
