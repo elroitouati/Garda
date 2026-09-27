@@ -3,7 +3,23 @@
 אפליקציית ווב (PWA) לטיול המשפחתי לאגם גארדה, 27.9–4.10.2026: מפה, לו"ז, מידע חיוני וכרטיס חירום.
 Vite, React, TypeScript, Tailwind, Supabase, Mapbox GL JS v3, Vercel.
 
-## צ'ק-ליסט: מה לפתוח בעצמך
+## הדרך הקצרה: הקמה אוטומטית
+
+צריך רק שלושה טוקנים כמשתני סביבה. כל השאר נעשה אוטומטית:
+
+| משתנה | מאיפה |
+|---|---|
+| `SUPABASE_ACCESS_TOKEN` | supabase.com/dashboard/account/tokens → Generate new token |
+| `VERCEL_TOKEN` | vercel.com/account/tokens → Create |
+| `MAPBOX_TOKEN` | account.mapbox.com → Default public token (מתחיל ב-`pk.`) |
+
+```bash
+npm run setup
+```
+
+הסקריפט יוצר פרויקט Supabase, מריץ את הסכמה וה-seed, מפעיל כניסה אנונימית, קובע קוד משפחתי ומדפיס אותו, בונה ופורס ל-Vercel, ומדפיס את הקישור. אפשר להריץ אותו שוב בכל עדכון, והוא לא יוצר כפילויות.
+
+## צ'ק-ליסט ידני (אם לא משתמשים בסקריפט)
 
 | # | שירות | מה לעשות | לאן זה הולך |
 |---|---|---|---|

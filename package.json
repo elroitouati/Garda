@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "dev:demo": "VITE_DEMO=1 vite",
-    "geocode": "node --env-file-if-exists=.env scripts/geocode.mjs"
+    "geocode": "node --env-file-if-exists=.env scripts/geocode.mjs",
+    "setup": "node --env-file-if-exists=.env scripts/setup.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
