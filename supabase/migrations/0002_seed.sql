@@ -16,7 +16,8 @@ insert into public.members (id, name, color, household_id, is_admin, sort) value
   ('yaara',  'יערה',    '#8E3B8E', 'tuati', false, 10),
   ('liel',   'ליאל',    '#C04A6A', 'tuati', false, 11),
   ('lia',    'ליה',     '#6B6FB0', 'tuati', false, 12),
-  ('yafit',  'יפית',    '#476E7A', 'tuati', false, 13);
+  ('yafit',  'יפית',    '#476E7A', 'tuati', false, 13),
+  ('shanel', 'שנאל',    '#9C3D3D', 'tuati', false, 14);
 update public.members set initials = 'סג' where id = 'gil';
 update public.members set initials = 'לל' where id = 'liel';
 update public.members set initials = 'לה' where id = 'lia';
