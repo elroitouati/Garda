@@ -14,9 +14,9 @@ function safeInsets() {
   return r
 }
 
-type Props = { snap: Snap; onSnap: (s: Snap) => void; children: ReactNode }
+type Props = { snap: Snap; onSnap: (s: Snap) => void; children: ReactNode; hidden?: boolean }
 
-export function BottomSheet({ snap, onSnap, children }: Props) {
+export function BottomSheet({ snap, onSnap, children, hidden = false }: Props) {
   const sheetRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const [vh, setVh] = useState(() => window.innerHeight)
@@ -38,7 +38,8 @@ export function BottomSheet({ snap, onSnap, children }: Props) {
     document.documentElement.style.setProperty('--sheet-h', `${Math.min(h, heights[1])}px`)
   }, [full, heights[1]]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useLayoutEffect(() => { apply(heights[snap]) }, [snap, apply]) // eslint-disable-line react-hooks/exhaustive-deps
+  // מוסתרת (למשל בזמן מסך הפתיחה): יושבת מתחת למסך ועולה משם
+  useLayoutEffect(() => { apply(hidden ? -40 : heights[snap]) }, [snap, apply, hidden]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (snap !== 2 && contentRef.current) contentRef.current.scrollTop = 0 }, [snap])
 
   const g = useRef<{ id: number; y0: number; x0: number; h0: number; drag: boolean; handle: boolean; samples: [number, number][] } | null>(null)
@@ -97,7 +98,7 @@ export function BottomSheet({ snap, onSnap, children }: Props) {
       className={`fixed inset-x-0 bottom-0 z-30 flex flex-col bg-surface shadow-[0_-8px_30px_-12px_rgb(0_0_0/0.35)] ${isFull ? 'rounded-none' : 'rounded-t-[28px]'}`}
       style={{
         height: full,
-        transition: dragging ? 'none' : 'transform .38s cubic-bezier(.2,.8,.2,1), border-radius .3s',
+        transition: dragging ? 'none' : hidden ? 'none' : 'transform .6s cubic-bezier(.16,1,.3,1), border-radius .3s',
         touchAction: isFull ? 'auto' : 'pan-x',
         willChange: 'transform',
       }}

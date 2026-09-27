@@ -1,4 +1,4 @@
-import { Camera, Check, Crosshair, ImagePlus, Images, MapPin, MessageCircle, Minus, Navigation, Plus, Shield, Umbrella, Users, WifiOff, X } from 'lucide-react'
+import { Camera, Check, ImagePlus, Images, LocateFixed, MapPin, MessageCircle, Minus, Navigation, Plus, Shield, Umbrella, WifiOff, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Avatar } from '../components/Avatar'
 import { BottomSheet, type Snap } from '../components/BottomSheet'
@@ -14,7 +14,7 @@ import { useToast } from '../components/Toast'
 import { distance, isLive, isStale } from '../lib/geo'
 import { useLocationSharing } from '../lib/location'
 import { initialsOf } from '../lib/members'
-import { unlockAudio } from '../lib/messages'
+import { isForMe, readOf, unlockAudio } from '../lib/messages'
 import { syncPush } from '../lib/push'
 import { shabbatPhase } from '../lib/shabbat'
 import { TIPS } from '../lib/tips'
@@ -41,7 +41,26 @@ export function MainScreen() {
   const [weather, setWeather] = useState<Record<string, DayWeather>>({})
   const [overlay, setOverlay] = useState<'settings' | 'emergency' | null>(null)
   const [avatarPrompt, setAvatarPrompt] = useState(false)
-  const [welcome, setWelcome] = useState<'full' | 'daily' | null>(null)
+  const [welcome, setWelcome] = useState<'full' | 'daily' | null>(() => {
+    // מחושב כבר בטעינה, כדי שממשק המפה לא יהבהב לפני הפוסטר
+    try {
+      const id = localStorage.getItem('garda-me') ?? localStorage.getItem('garda-demo-me')
+      if (id && !localStorage.getItem(`garda-onboarded-${id}`)) return 'full'
+      if (localStorage.getItem('garda-welcome-day') !== romeDate(new Date())) return 'daily'
+    } catch { /* ignore */ }
+    return null
+  })
+  // ממשק המפה מתגלה רק אחרי מסך הפתיחה
+  const [revealed, setRevealed] = useState(() => welcome === null)
+  const [fabOpen, setFabOpen] = useState(false)
+  // הודעות, טיפים ובקשות קופצות רק אחרי שהמעבר למפה נגמר, כדי לא לשבור אותו
+  const [settled, setSettled] = useState(revealed)
+  useEffect(() => {
+    if (!revealed || settled) return
+    const t1 = setTimeout(() => setSettled(true), 2200)
+    return () => clearTimeout(t1)
+  }, [revealed]) // eslint-disable-line react-hooks/exhaustive-deps
+  const [tab, setTab] = useState<'day' | 'family' | 'album' | 'info'>('day')
   const [compose, setCompose] = useState(false)
   const [cameraMenu, setCameraMenu] = useState(false)
   const [gallery, setGallery] = useState<{ ids: string[] | null; start: number } | null>(null)
@@ -111,11 +130,8 @@ export function MainScreen() {
 
   // מסך פתיחה: מלא בפעם הראשונה בטלפון, ובכל בוקר רק הפוסטר עם תוכנית היום
   useEffect(() => {
-    if (!me) return
-    try {
-      if (!localStorage.getItem(`garda-onboarded-${me.id}`)) setWelcome('full')
-      else if (localStorage.getItem('garda-welcome-day') !== romeDate(new Date())) setWelcome('daily')
-    } catch { /* ignore */ }
+    if (!me || welcome) return
+    try { if (!localStorage.getItem(`garda-onboarded-${me.id}`)) { setWelcome('full'); setRevealed(false) } } catch { /* ignore */ }
   }, [me?.id]) // eslint-disable-line react-hooks/exhaustive-deps
   const closeWelcome = () => {
     try {
@@ -140,7 +156,7 @@ export function MainScreen() {
   }
   const firstFit = useRef(false)
   useEffect(() => {
-    if (!data || !dayItems.length) return
+    if (!data || !dayItems.length || welcome) return
     const delay = firstFit.current ? 0 : 600
     firstFit.current = true
     const id = setTimeout(fitDay, delay)
@@ -177,10 +193,34 @@ export function MainScreen() {
     if (pts.length) mapRef.current?.fit(pts, { maxZoom: 16 })
     else toast('עוד אף אחד לא משתף מיקום')
   }
+  /** "הצג את כולם": המשפחה אם יש מיקומים, אחרת המקומות של היום */
+  const focusAll = () => {
+    if (people.some((p) => !p.stale && !p.isMe)) fitPeople()
+    else fitDay()
+  }
+
+  // ── מסך הפתיחה → המפה: מתחילים מגבוה מעל צפון איטליה ועפים פנימה ──
+  useEffect(() => {
+    if (!welcome) return
+    const t0 = setTimeout(() => mapRef.current?.jump({ lat: 45.62, lng: 10.62 }, 7.2), 50)
+    return () => clearTimeout(t0)
+  }, [!!welcome, !!data]) // eslint-disable-line react-hooks/exhaustive-deps
+  const playIntro = () => {
+    firstFit.current = true
+    peopleFit.current = true
+    const fresh = people.filter((p) => !p.stale)
+    const pts = fresh.length > 1 ? fresh : (() => {
+      const ps = dayItems.map((a) => a.place).filter((p): p is Place => !!p && p.kind !== 'airport')
+      return ps.length ? ps : (data?.places.filter((p) => p.kind === 'hotel') ?? [])
+    })()
+    setTimeout(() => mapRef.current?.fit(pts, { maxZoom: 14, duration: 2200 }), 150)
+    setTimeout(() => setRevealed(true), 700)
+  }
+
   // בפתיחה: אם יש משתתפים שמשתפים מיקום, מתמקדים בהם
   const peopleFit = useRef(false)
   useEffect(() => {
-    if (peopleFit.current || !people.some((p) => !p.isMe && !p.stale)) return
+    if (welcome || peopleFit.current || !people.some((p) => !p.isMe && !p.stale)) return
     peopleFit.current = true
     setTimeout(fitPeople, 700)
   }, [people]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -255,52 +295,58 @@ export function MainScreen() {
     )
   }
 
+  const hidden = !revealed
+  const unread = me ? live.messages.filter((m) => romeDate(new Date(m.created_at)) === today && isForMe(m, me, data.members) && !readOf(m, me.id, live.reads)).length : 0
+  const TABS: ['day' | 'family' | 'album' | 'info', string, number][] = [['day', 'היום', 0], ['family', 'משפחה', unread], ['album', 'אלבום', 0], ['info', 'מידע', 0]]
+  const fabActions: { key: string; label: string; icon: React.ReactNode; tone: string; run: () => void }[] = [
+    { key: 'photo', label: 'תמונה לאלבום', icon: <Camera size={20} />, tone: 'bg-green text-white', run: () => setCameraMenu(true) },
+    { key: 'msg', label: 'הודעה למשפחה', icon: <MessageCircle size={20} />, tone: 'bg-surface text-ink', run: () => setCompose(true) },
+    { key: 'meet', label: 'נקודת מפגש', icon: <MapPin size={20} />, tone: 'bg-surface text-terra', run: () => startMeeting() },
+  ]
+
   return (
     <main className="fixed inset-0 overflow-hidden bg-bg">
       <MapView ref={mapRef} places={visiblePlaces} highlight={dayPlaceIds} selectedId={selectedPlace?.id ?? null} onSelect={setSelectedPlace} bottomPadding={snap === 0 ? 130 : Math.round(window.innerHeight * 0.52)}
         photos={placing ? photos.filter((p) => p.id !== placing.id) : photos} thumbUrl={photoUrl} onPhotos={(ids) => setGallery({ ids, start: 0 })}
         people={people} meeting={mapMeeting} onLongPress={(p) => { if (!meetDraft && !placing) startMeeting(p) }} />
 
-      {/* כותרת עליונה */}
-      <header className={`pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start gap-2 px-3 pt-[calc(var(--safe-top)+10px)] transition-opacity duration-300 ${snap === 2 ? 'opacity-0' : ''}`}>
+      {/* כותרת: אני · היום · חירום */}
+      <header className={`reveal reveal-top pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center gap-2 px-3 pt-[calc(var(--safe-top)+10px)] ${hidden || snap === 2 ? 'is-hidden' : ''}`} style={{ transitionDelay: hidden ? '0ms' : '650ms' }}>
         <button className="pointer-events-auto rounded-full shadow-float" onClick={() => setOverlay('settings')} aria-label="הגדרות">
-          {me ? <Avatar member={me} size={46} ring /> : <span className="btn-icon" />}
+          {me ? <Avatar member={me} size={44} ring /> : <span className="btn-icon" />}
         </button>
-        <div className="pointer-events-auto flex min-h-[46px] flex-1 flex-col justify-center rounded-3xl bg-surface/95 px-4 py-1.5 shadow-float backdrop-blur">
-          <h1 className="text-[19px] leading-tight">טואטי בגארדה</h1>
-          <p className="truncate text-[13px] leading-tight text-muted">
-            {dayIndex >= 0 ? <>יום {dayIndex + 1} מתוך {data.days.length} · <bdi>{dayObj?.title}</bdi></> : <bdi>27.9 – 4.10.2026</bdi>}
-            {isFakeNow() && <span className="ms-1 font-bold text-terra">· שעון בדיקה</span>}
-          </p>
+        <div className="pointer-events-auto flex min-h-[44px] min-w-0 items-center gap-2 rounded-full bg-surface/95 py-1.5 pe-4 ps-2 shadow-float backdrop-blur">
+          {dayIndex >= 0 && <span className="tnum grid h-8 min-w-8 place-items-center rounded-full bg-green px-2 text-[14px] font-bold text-white">{dayIndex + 1}</span>}
+          <span className="truncate font-display text-[17px] leading-none"><bdi>{dayIndex >= 0 ? dayObj?.title : 'טואטי בגארדה'}</bdi></span>
+          {isFakeNow() && <span className="text-[12px] font-bold text-terra">בדיקה</span>}
         </div>
+        <span className="flex-1" />
         <button className="pointer-events-auto grid h-11 w-11 place-items-center rounded-full bg-surface/95 text-danger shadow-float" onClick={() => setOverlay('emergency')} aria-label="כרטיס חירום">
-          <Shield size={20} strokeWidth={2.4} />
+          <Shield size={19} strokeWidth={2.4} />
         </button>
       </header>
 
-      {(offline || loadError) && (
-        <div className="absolute inset-x-0 z-20 flex justify-center" style={{ top: 'calc(var(--safe-top) + 66px)' }}>
+      {(offline || loadError) && !hidden && (
+        <div className="absolute inset-x-0 z-20 flex justify-center" style={{ top: 'calc(var(--safe-top) + 64px)' }}>
           <span className="flex items-center gap-1.5 rounded-full bg-ink/85 px-3 py-1 text-[13px] font-semibold text-bg">
             <WifiOff size={14} /> {offline ? 'אין קליטה · מציג נתונים שמורים' : 'לא הצלחתי לרענן'}
           </span>
         </div>
       )}
 
-      {/* כפתורי מפה — עולים ויורדים עם החלונית */}
-      <div
-        className="absolute end-3 z-20 flex flex-col gap-2 transition-[bottom,opacity] duration-300"
-        style={{ bottom: 'calc(var(--sheet-h) + 14px)', opacity: snap === 2 ? 0 : 1 }}
-      >
-        <button className="btn-icon" onClick={() => mapRef.current?.zoomBy(1)} aria-label="התקרב"><Plus size={22} /></button>
-        <button className="btn-icon" onClick={() => mapRef.current?.zoomBy(-1)} aria-label="התרחק"><Minus size={22} /></button>
-        <button className="btn-icon text-green" onClick={fitDay} aria-label="הצג את כל המקומות של היום"><Crosshair size={21} /></button>
-        <button className="btn-icon text-green" onClick={fitPeople} aria-label="הצג את כולם"><Users size={21} /></button>
-        <button className="btn-icon text-terra" onClick={() => startMeeting()} aria-label="קבע נקודת מפגש"><MapPin size={21} /></button>
+      {/* פס שליטה אחד במפה: זום ומיקוד */}
+      <div className={`reveal reveal-side absolute end-3 z-20 flex flex-col overflow-hidden rounded-full bg-surface/95 shadow-float backdrop-blur ${hidden || snap === 2 || meetDraft || placing ? 'is-hidden' : ''}`}
+        style={{ bottom: 'calc(var(--sheet-h) + 14px)', transitionDelay: hidden ? '0ms' : '800ms', transitionProperty: 'opacity, transform, bottom' }}>
+        <button className="grid h-11 w-11 place-items-center" onClick={() => mapRef.current?.zoomBy(1)} aria-label="התקרב"><Plus size={20} /></button>
+        <span className="mx-2.5 h-px bg-line" />
+        <button className="grid h-11 w-11 place-items-center" onClick={() => mapRef.current?.zoomBy(-1)} aria-label="התרחק"><Minus size={20} /></button>
+        <span className="mx-2.5 h-px bg-line" />
+        <button className="grid h-11 w-11 place-items-center text-green" onClick={focusAll} aria-label="הצג את כולם"><LocateFixed size={20} /></button>
       </div>
 
       {/* סינון: כולם / המשפחה שלי */}
-      {data.households.length > 1 && snap !== 2 && !meetDraft && !placing && (
-        <div className="absolute start-3 z-20 flex rounded-full bg-surface/95 p-1 shadow-float" style={{ top: 'calc(var(--safe-top) + 66px)' }} role="radiogroup" aria-label="סינון">
+      {data.households.length > 1 && snap !== 2 && !meetDraft && !placing && !hidden && (
+        <div className="absolute start-3 z-20 flex rounded-full bg-surface/95 p-1 shadow-float" style={{ top: 'calc(var(--safe-top) + 64px)' }} role="radiogroup" aria-label="סינון">
           {([['all', 'כולם'], ['mine', 'המשפחה שלי']] as const).map(([k, l]) => (
             <button key={k} role="radio" aria-checked={filter === k} onClick={() => setFilter(k)} className={`min-h-[36px] rounded-full px-3 text-[14px] font-semibold ${filter === k ? 'bg-green text-white' : 'text-muted'}`}>{l}</button>
           ))}
@@ -324,19 +370,27 @@ export function MainScreen() {
         </>
       )}
 
-      {/* מצלמה והודעה — בצד השני של המפה */}
+      {/* כפתור פעולה אחד: תמונה · הודעה · נקודת מפגש */}
+      {fabOpen && <button className="fixed inset-0 z-[25] bg-black/25 backdrop-blur-[2px] animate-[fade-in_.2s_both]" aria-label="סגור" onClick={() => setFabOpen(false)} />}
       {!selectedPlace && !placing && !meetDraft && (
-        <div className="absolute start-3 z-20 flex flex-col items-center gap-2.5 transition-[bottom,opacity] duration-300"
-          style={{ bottom: 'calc(var(--sheet-h) + 14px)', opacity: snap === 2 ? 0 : 1 }}>
-          <button className="btn-icon h-12 w-12" onClick={() => setCompose(true)} aria-label="הודעה למשפחה"><MessageCircle size={22} /></button>
-          <button className="grid h-16 w-16 place-items-center rounded-full bg-green text-white shadow-float transition active:scale-95" onClick={() => setCameraMenu(true)} aria-label="צלם או הוסף תמונה">
-            <Camera size={28} />
+        <div className={`reveal reveal-pop absolute start-3 z-30 flex flex-col items-start gap-2.5 ${hidden || snap === 2 ? 'is-hidden' : ''}`}
+          style={{ bottom: 'calc(var(--sheet-h) + 14px)', transitionDelay: hidden ? '0ms' : '900ms', transitionProperty: 'opacity, transform, bottom' }}>
+          {fabOpen && fabActions.map((a, i) => (
+            <button key={a.key} className={`fab-item flex min-h-[48px] items-center gap-2.5 rounded-full py-2 pe-5 ps-2 font-semibold shadow-float ${a.tone}`}
+              style={{ animationDelay: `${(fabActions.length - 1 - i) * 45}ms` }}
+              onClick={() => { setFabOpen(false); a.run() }}>
+              <span className="grid h-9 w-9 place-items-center rounded-full bg-black/5">{a.icon}</span>{a.label}
+            </button>
+          ))}
+          <button className={`grid h-16 w-16 place-items-center rounded-full text-white shadow-float transition-[transform,background-color] duration-200 active:scale-95 ${fabOpen ? 'rotate-45 bg-ink' : 'bg-green'}`}
+            onClick={() => setFabOpen((o) => !o)} aria-label={fabOpen ? 'סגור' : 'פעולות: תמונה, הודעה, נקודת מפגש'} aria-expanded={fabOpen}>
+            <Plus size={30} strokeWidth={2.4} />
           </button>
         </div>
       )}
 
       {uploads && (
-        <div className="absolute inset-x-0 z-30 flex justify-center" style={{ top: 'calc(var(--safe-top) + 66px)' }}>
+        <div className="absolute inset-x-0 z-30 flex justify-center" style={{ top: 'calc(var(--safe-top) + 64px)' }}>
           <span className="tnum flex items-center gap-2 rounded-full bg-ink/90 px-4 py-2 text-[14px] font-semibold text-bg">
             {uploads.done + uploads.failed < uploads.total ? <>מעלה {uploads.done + uploads.failed + 1} מתוך {uploads.total}…</> : <><Check size={16} className="text-[#7BD389]" /> הועלו {uploads.done}</>}
           </span>
@@ -386,7 +440,7 @@ export function MainScreen() {
         </div>
       )}
 
-      <BottomSheet snap={snap} onSnap={setSnap}>
+      <BottomSheet snap={snap} onSnap={setSnap} hidden={hidden}>
         <NowRow list={list} t={t} onPlace={focusPlace} />
         {phase === 'friday' && <FridayCard />}
         {meeting && (
@@ -396,83 +450,109 @@ export function MainScreen() {
         )}
         <NextCard list={list} t={t} />
 
-        <SectionTitle action={<button className="min-h-[44px] px-1 text-[15px] font-semibold text-green" onClick={() => setCompose(true)}>הודעה חדשה</button>}>הודעות היום</SectionTitle>
-        <PushCard onInstall={() => setOverlay('settings')} />
-        <MessageHistory onCompose={() => setCompose(true)} />
-
-        <SectionTitle action={photos.length > 0 && <button className="min-h-[44px] px-1 text-[15px] font-semibold text-green" onClick={() => setGallery({ ids: null, start: 0 })}>כל {photos.length} התמונות</button>}>האלבום</SectionTitle>
-        {photos.length ? (
-          <div className="no-scrollbar flex gap-2 overflow-x-auto px-5 pb-1" style={{ touchAction: 'pan-x' }}>
-            {photos.slice(0, 30).map((ph, k) => {
-              const u = photoUrl(ph.thumb_path)
-              const who = data.members.find((m) => m.id === ph.member_id)
-              return (
-                <button key={ph.id} className="relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-surface2" onClick={() => setGallery({ ids: null, start: k })} aria-label={`תמונה של ${who?.name ?? ''}`}>
-                  {u && <img src={u} alt="" className="h-full w-full object-cover" loading="lazy" />}
-                  {who && <span className="absolute bottom-1 end-1"><Avatar member={who} size={22} /></span>}
-                </button>
-              )
-            })}
+        {/* לשוניות: כל דבר במקום שלו */}
+        <div className="sticky top-0 z-10 mt-4 bg-surface px-4 pb-2 pt-1">
+          <div className="grid grid-cols-4 gap-1 rounded-2xl bg-surface2 p-1" role="tablist" aria-label="תוכן">
+            {TABS.map(([k, label, badge]) => (
+              <button key={k} role="tab" aria-selected={tab === k} onClick={() => { setTab(k); if (snap === 0) setSnap(1) }}
+                className={`relative min-h-[40px] rounded-xl text-[15px] font-semibold transition ${tab === k ? 'bg-surface text-ink shadow-card' : 'text-muted'}`}>
+                {label}
+                {badge > 0 && <span className="tnum absolute -top-1 end-1 grid h-5 min-w-5 place-items-center rounded-full bg-terra px-1 text-[11px] font-bold text-white">{badge}</span>}
+              </button>
+            ))}
           </div>
-        ) : (
-          <div className="mx-4 flex items-center gap-3 rounded-2xl bg-surface2 p-4">
-            <Images size={22} className="shrink-0 text-muted" />
-            <p className="flex-1 text-muted">עוד אין תמונות. כל תמונה שתעלו תופיע כאן ועל המפה.</p>
-            <button className="btn-primary" onClick={() => setCameraMenu(true)}>הוסף</button>
-          </div>
-        )}
+        </div>
 
-        <SectionTitle action={
-          <label className="flex min-h-[44px] items-center gap-2 text-[15px] font-semibold">
-            <span className={loc.sharing ? 'text-green' : 'text-muted'}>{loc.sharing ? 'משתף מיקום' : 'מיקום מושהה'}</span>
-            <input type="checkbox" role="switch" className="h-6 w-6 accent-[rgb(var(--green))]" checked={loc.sharing} onChange={async (e) => {
-              const on = e.target.checked
-              if (on) navigator.geolocation?.getCurrentPosition(() => {}, () => {}, { timeout: 1 })
-              try { await loc.setSharing(on); await refreshLive() } catch { toast('לא הצלחתי לעדכן. בדוק קליטה.') }
-            }} />
-          </label>
-        }>המשפחה</SectionTitle>
-        {(loc.state === 'denied' || loc.state === 'unavailable') && !locHelpHidden && <LocationHelp state={loc.state} onClose={() => setLocHelpHidden(true)} />}
-        <FamilyStrip members={familyMembers} meId={meId} locations={live.locations} myPos={loc.pos} onTap={(m) => {
-          const p = people.find((x) => x.id === m.id)
-          if (p) { setSnap(0); mapRef.current?.flyTo(p, 16) }
-          else toast(`${m.name} עוד לא משתף מיקום`)
-        }} />
+        <div key={tab} className="tab-in pb-8">
+          {tab === 'day' && (
+            <>
+              <DayChips days={data.days} selected={day} today={today} weather={weather} onSelect={(d) => { setSelectedDay(d); setSelectedPlace(null) }} />
+              <SectionTitle action={dayObj && <span className="text-[15px] text-muted"><bdi>{weekdayLetter(day)} {shortDate(day)}</bdi></span>}>
+                {dayObj?.title ?? 'היום'}
+              </SectionTitle>
+              {dayObj?.subtitle && <p className="-mt-1 mb-2 px-5 text-muted">{dayObj.subtitle}</p>}
+              {rainyDay && (
+                <div className="mx-4 mb-2 flex items-center gap-2 rounded-2xl bg-lake/15 p-3 text-[15px]">
+                  <Umbrella size={18} className="shrink-0 text-lake" /> צפוי גשם ({weather[day].rain}%). יש רעיונות בתוכנית הגשם למטה.
+                </div>
+              )}
+              <Timeline items={dayItems} t={t} onPlace={focusPlace} />
+              <SectionTitle>תוכנית גשם</SectionTitle>
+              <RainPlan places={rainPlaces} onPlace={focusPlace} />
+            </>
+          )}
 
-        <SectionTitle>ימי הטיול</SectionTitle>
-        <DayChips days={data.days} selected={day} today={today} weather={weather} onSelect={(d) => { setSelectedDay(d); setSelectedPlace(null) }} />
+          {tab === 'family' && (
+            <>
+              <div className="mx-4 mt-2 flex min-h-[52px] items-center gap-3 rounded-2xl bg-surface2 px-4">
+                <MapPin size={18} className={loc.sharing ? 'text-green' : 'text-muted'} />
+                <span className="flex-1 font-semibold">{loc.sharing ? 'המיקום שלי משותף' : 'המיקום שלי מושהה'}</span>
+                <input type="checkbox" role="switch" aria-label="שתף מיקום" className="h-6 w-6 accent-[rgb(var(--green))]" checked={loc.sharing} onChange={async (e) => {
+                  const on = e.target.checked
+                  if (on) navigator.geolocation?.getCurrentPosition(() => {}, () => {}, { timeout: 1 })
+                  try { await loc.setSharing(on); await refreshLive() } catch { toast('לא הצלחתי לעדכן. בדוק קליטה.') }
+                }} />
+              </div>
+              {(loc.state === 'denied' || loc.state === 'unavailable') && !locHelpHidden && <LocationHelp state={loc.state} onClose={() => setLocHelpHidden(true)} />}
+              <div className="mt-4">
+                <FamilyStrip members={familyMembers} meId={meId} locations={live.locations} myPos={loc.pos} onTap={(m) => {
+                  const p = people.find((x) => x.id === m.id)
+                  if (p) { setSnap(0); mapRef.current?.flyTo(p, 16) }
+                  else toast(`${m.name} עוד לא משתף מיקום`)
+                }} />
+              </div>
+              <SectionTitle action={<button className="min-h-[44px] px-1 text-[15px] font-semibold text-green" onClick={() => setCompose(true)}>הודעה חדשה</button>}>הודעות היום</SectionTitle>
+              <PushCard onInstall={() => setOverlay('settings')} />
+              <MessageHistory onCompose={() => setCompose(true)} />
+            </>
+          )}
 
-        <SectionTitle action={dayObj && <span className="text-[15px] text-muted"><bdi>{weekdayLetter(day)} {shortDate(day)}</bdi></span>}>
-          {dayObj?.title ?? 'היום'}
-        </SectionTitle>
-        {dayObj?.subtitle && <p className="-mt-1 mb-2 px-5 text-muted">{dayObj.subtitle}</p>}
-        {rainyDay && (
-          <div className="mx-4 mb-2 flex items-center gap-2 rounded-2xl bg-lake/15 p-3 text-[15px]">
-            <Umbrella size={18} className="shrink-0 text-lake" /> צפוי גשם ({weather[day].rain}%). אפשר לבחור מתוכנית הגשם למטה.
-          </div>
-        )}
-        <Timeline items={dayItems} t={t} onPlace={focusPlace} />
+          {tab === 'album' && (
+            photos.length ? (
+              <>
+                <div className="grid grid-cols-3 gap-1.5 px-4 pt-2">
+                  {photos.slice(0, 60).map((ph, k) => {
+                    const u = photoUrl(ph.thumb_path)
+                    const who = data.members.find((m) => m.id === ph.member_id)
+                    return (
+                      <button key={ph.id} className="relative aspect-square overflow-hidden rounded-xl bg-surface2" onClick={() => setGallery({ ids: null, start: k })} aria-label={`תמונה של ${who?.name ?? ''}`}>
+                        {u && <img src={u} alt="" className="h-full w-full object-cover" loading="lazy" />}
+                        {who && <span className="absolute bottom-1 end-1"><Avatar member={who} size={20} /></span>}
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="flex gap-2 px-4 pt-3">
+                  <button className="btn-primary flex-1" onClick={() => setCameraMenu(true)}><Camera size={18} /> הוסף תמונה</button>
+                  <button className="btn-ghost flex-1" onClick={() => setGallery({ ids: null, start: 0 })}><Images size={18} /> כל {photos.length}</button>
+                </div>
+              </>
+            ) : (
+              <div className="mx-4 mt-2 flex flex-col items-center gap-3 rounded-3xl bg-surface2 p-6 text-center">
+                <Images size={28} className="text-muted" />
+                <p className="text-muted">עוד אין תמונות. כל תמונה שתעלו תופיע כאן ועל המפה, במקום שבו צולמה.</p>
+                <button className="btn-primary" onClick={() => setCameraMenu(true)}><Camera size={18} /> תמונה ראשונה</button>
+              </div>
+            )
+          )}
 
-        <SectionTitle>תוכנית גשם</SectionTitle>
-        <RainPlan places={rainPlaces} onPlace={focusPlace} />
-
-        <SectionTitle>מידע חיוני</SectionTitle>
-        <Essentials items={myEssentials} />
-
-        <p className="px-5 pb-10 pt-8 text-center text-sm text-muted">שבוע טוב ומהנה, משפחת טואטי</p>
+          {tab === 'info' && (
+            <div className="pt-2"><Essentials items={myEssentials} /></div>
+          )}
+        </div>
       </BottomSheet>
 
       {welcome && (
-        <Welcome full={welcome === 'full'} onDone={closeWelcome} onLocation={(share) => {
+        <Welcome full={welcome === 'full'} onDone={closeWelcome} onLeave={playIntro} onLocation={(share) => {
           if (share) { navigator.geolocation?.getCurrentPosition(() => {}, () => {}, { enableHighAccuracy: true, timeout: 20000 }); loc.setConsent('yes') }
           else loc.setConsent('no')
         }} />
       )}
-      {!welcome && <MessagePopups onShowOnMap={(lat, lng) => { setSnap(0); mapRef.current?.flyTo({ lat, lng }, 16) }} />}
-      {newMeeting && !welcome && <MeetingPopup meeting={newMeeting} onClose={() => markMeetingSeen(newMeeting.id)}
+      {settled && <MessagePopups onShowOnMap={(lat, lng) => { setSnap(0); mapRef.current?.flyTo({ lat, lng }, 16) }} />}
+      {newMeeting && settled && <MeetingPopup meeting={newMeeting} onClose={() => markMeetingSeen(newMeeting.id)}
         onShow={() => { markMeetingSeen(newMeeting.id); setSnap(0); mapRef.current?.fit([newMeeting, ...people.filter((p) => p.isMe)], { maxZoom: 17 }) }} />}
-      {tip && !welcome && <TipCard title={tip.title} body={tip.body} onClose={() => setTip(null)} />}
-      {loc.consent === null && !avatarPrompt && !welcome && (
+      {tip && settled && <TipCard title={tip.title} body={tip.body} onClose={() => setTip(null)} />}
+      {loc.consent === null && !avatarPrompt && settled && (
         <LocationConsent
           onYes={() => {
             // הבקשה יוצאת מתוך הלחיצה עצמה (דרישה של iOS)
@@ -501,7 +581,7 @@ export function MainScreen() {
       )}
       {overlay === 'settings' && <Settings onClose={() => setOverlay(null)} />}
       {overlay === 'emergency' && <EmergencyCard onClose={() => setOverlay(null)} />}
-      {avatarPrompt && me && !welcome && (
+      {avatarPrompt && me && settled && (
         <AvatarSetup
           member={me}
           onDone={() => setAvatarPrompt(false)}

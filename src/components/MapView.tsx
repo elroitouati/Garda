@@ -7,7 +7,8 @@ import type { Photo, Place } from '../lib/types'
 import { PlaceIcon } from './PlaceIcon'
 
 export type MapHandle = {
-  fit: (pts: { lat: number; lng: number }[], opts?: { maxZoom?: number }) => void
+  fit: (pts: { lat: number; lng: number }[], opts?: { maxZoom?: number; duration?: number }) => void
+  jump: (p: { lat: number; lng: number }, zoom: number) => void
   flyTo: (p: { lat: number; lng: number }, zoom?: number) => void
   zoomBy: (d: number) => void
   resize: () => void
@@ -125,10 +126,19 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ places, h
     fit(pts, opts) {
       const m = map.current
       if (!m || !pts.length) return
-      if (pts.length === 1) { m.flyTo({ center: [pts[0].lng, pts[0].lat], zoom: opts?.maxZoom ?? 13.5, padding: padding(), essential: true }); return }
+      if (pts.length === 1) { m.flyTo({ center: [pts[0].lng, pts[0].lat], zoom: opts?.maxZoom ?? 13.5, padding: padding(), essential: true, ...(opts?.duration ? { duration: opts.duration, curve: 1.6 } : {}) }); return }
       const b = new maplibregl.LngLatBounds()
       pts.forEach((p) => b.extend([p.lng, p.lat]))
-      m.fitBounds(b, { padding: padding(), maxZoom: opts?.maxZoom ?? 14, duration: 1400, essential: true })
+      const cam = m.cameraForBounds(b, { padding: padding(), maxZoom: opts?.maxZoom ?? 14 })
+      if (cam) m.flyTo({ ...cam, essential: true, duration: opts?.duration ?? 1400, curve: 1.5 })
+    },
+    jump(p, zoom) {
+      const m = map.current
+      if (!m) return
+      const go = () => m.jumpTo({ center: [p.lng, p.lat], zoom })
+      go()
+      // הסגנון עלול להחזיר את המצלמה כשהוא נטען — מחילים שוב
+      if (!m.isStyleLoaded()) m.once('load', go)
     },
     flyTo(p, z) { map.current?.flyTo({ center: [p.lng, p.lat], zoom: z ?? 15, padding: padding(), essential: true }) },
     zoomBy(d) { const m = map.current; if (m) m.easeTo({ zoom: m.getZoom() + d, duration: 300 }) },
@@ -300,6 +310,7 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ places, h
       attributionControl: false,
     })
     map.current = m
+    if (import.meta.env.VITE_DEMO === '1') (window as unknown as { __map: unknown }).__map = m
     m.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left')
     m.addControl(new maplibregl.ScaleControl({ unit: 'metric', maxWidth: 90 }), 'top-left')
     m.touchZoomRotate.disableRotation()
@@ -365,6 +376,8 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ places, h
         entry.el.classList.toggle('is-today', today)
         entry.el.classList.toggle('is-selected', sel)
         entry.el.classList.toggle('is-rain', p.rain_plan && !p.main)
+        // פחות רעש: מקומות שלא שייכים להיום הם נקודה קטנה עד שמתקרבים
+        entry.el.classList.toggle('is-minor', !today && !sel && zoom < 12.5)
         entry.el.style.zIndex = sel ? '5' : today ? '3' : '1'
         const showLabel = sel || today || zoom >= 12.5
         return createPortal(

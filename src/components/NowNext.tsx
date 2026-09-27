@@ -62,31 +62,25 @@ export function NextCard({ list, t }: { list: Timed[]; t: Date }) {
   const p = next.place
   return (
     <section className="mx-4 rounded-3xl bg-greenSoft p-4" aria-label="הבא בתור">
-      <div className="flex items-start gap-3">
-        {p && <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-green text-white"><PlaceIcon kind={p.kind} size={22} /></span>}
+      <div className="flex items-center gap-3">
+        {p && <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-green text-white"><PlaceIcon kind={p.kind} size={21} /></span>}
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-bold text-green">הבא בתור{optLabel(next.option_group)}</div>
-          <div className="truncate font-display text-xl leading-tight"><bdi>{next.title}</bdi></div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 text-[15px] text-muted">
-            <span className="inline-flex items-center gap-1"><Clock size={15} /><bdi className="tnum">{weekdayLetter(next.day)} {shortDate(next.day)} · {hm(next.start_time)}</bdi></span>
-            {drive != null && drive > 0 && <span className="tnum">{drive} דק׳ נסיעה</span>}
+          <div className="text-[13px] font-bold text-green">הבא בתור{optLabel(next.option_group)}</div>
+          <div className="truncate font-display text-[19px] leading-tight"><bdi>{next.title}</bdi></div>
+          <div className="flex items-center gap-1 text-[14px] text-muted">
+            <Clock size={13} /><bdi className="tnum">{ms > 86400000 ? `${weekdayLetter(next.day)} ${shortDate(next.day)} · ` : ''}{hm(next.start_time)}</bdi>
+            {drive != null && drive > 0 && <span className="tnum"> · {drive} דק׳ נסיעה</span>}
           </div>
         </div>
-      </div>
-      <div className="mt-3 flex items-end justify-between gap-3">
-        <div>
-          <div className="text-sm text-muted">מתחיל בעוד</div>
-          <div className="tnum font-display text-[40px] leading-none text-ink" aria-live="off">
-            <bdi>{ms > 86400000 ? formatDuration(ms) : countdown(ms)}</bdi>
-          </div>
+        <div className="shrink-0 text-end">
+          <div className="text-[12px] text-muted">בעוד</div>
+          <div className="tnum font-display text-[24px] leading-none"><bdi>{ms > 86400000 ? formatDuration(ms) : countdown(ms)}</bdi></div>
         </div>
       </div>
       {p && (
         <div className="mt-3 flex gap-2">
-          <a className="btn-primary flex-1" href={wazeLink(p.lat, p.lng)} target="_blank" rel="noreferrer">
-            <Navigation size={18} /> נווט עם Waze
-          </a>
-          <a className="btn-ghost bg-surface" href={googleLink(p.lat, p.lng)} target="_blank" rel="noreferrer">גוגל מפות</a>
+          <a className="btn-primary min-h-[44px] flex-1 text-[15px]" href={wazeLink(p.lat, p.lng)} target="_blank" rel="noreferrer"><Navigation size={17} /> נווט עם Waze</a>
+          <a className="btn-ghost min-h-[44px] bg-surface text-[15px]" href={googleLink(p.lat, p.lng)} target="_blank" rel="noreferrer">גוגל מפות</a>
         </div>
       )}
     </section>

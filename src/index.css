@@ -221,6 +221,34 @@ button { -webkit-user-select: none; user-select: none; }
 @keyframes sun-rise { from { transform: translateY(40px); opacity: 0; } }
 .welcome { animation: fade-in .35s cubic-bezier(.16,1,.3,1) both; }
 @keyframes fade-in { from { opacity: 0; } }
-.welcome.is-leaving { opacity: 0; transition: opacity .42s cubic-bezier(.16,1,.3,1); pointer-events: none; }
-.welcome.is-leaving .welcome-poster { transform: scale(1.25); transition: transform .42s cubic-bezier(.16,1,.3,1); }
-.welcome.is-leaving .welcome-body { transform: translateY(40%); transition: transform .42s cubic-bezier(.16,1,.3,1); }
+/* מעבר בין שלבים: התוכן החדש נכנס מהשמאל (קדימה בעברית) */
+.step-in { animation: step-in .42s cubic-bezier(.16,1,.3,1) both; }
+@keyframes step-in { from { opacity: 0; transform: translateX(-28px); } }
+/* יציאה: "עפים" לתוך האגם — הפוסטר מתקרב ונמס, הכרטיס יורד, והמפה מתגלה מתחת */
+.welcome.is-leaving { background: transparent; pointer-events: none; animation: none; }
+.welcome.is-leaving .welcome-poster {
+  transform-origin: 50% 78%; animation: fly-in .9s cubic-bezier(.65,0,.35,1) forwards;
+}
+.welcome.is-leaving .welcome-body { animation: body-out .55s cubic-bezier(.65,0,.35,1) forwards; }
+@keyframes fly-in {
+  0% { transform: scale(1); opacity: 1; filter: blur(0); }
+  60% { opacity: 1; }
+  100% { transform: scale(3.2); opacity: 0; filter: blur(8px); }
+}
+@keyframes body-out { to { transform: translateY(105%); } }
+
+/* החזרה של ממשק המפה אחרי מסך הפתיחה, בהדרגה */
+.reveal { transition: opacity .5s cubic-bezier(.16,1,.3,1), transform .6s cubic-bezier(.16,1,.3,1); }
+.reveal.is-hidden { opacity: 0; pointer-events: none; }
+.reveal-top.is-hidden { transform: translateY(-24px); }
+.reveal-pop.is-hidden { transform: scale(.6); }
+.reveal-side.is-hidden { transform: translateX(-16px); }
+
+/* מקום משני: נקודה קטנה עד שמתקרבים */
+.place-marker .place-pin { transition: width .25s, height .25s, transform .2s, border-width .25s; }
+.place-marker.is-minor .place-pin { width: 14px; height: 14px; border-width: 3px; background: rgb(var(--green)); border-color: rgb(var(--surface)); }
+.place-marker.is-minor .place-pin svg { display: none; }
+.place-marker.is-minor { margin-top: 12px; }
+.fab-item { animation: fab-in .28s cubic-bezier(.34,1.56,.64,1) both; }
+@keyframes fab-in { from { opacity: 0; transform: translateY(14px) scale(.85); } }
+.tab-in { animation: fade-in .25s cubic-bezier(.2,0,0,1) both; }

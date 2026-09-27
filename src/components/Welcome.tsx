@@ -63,9 +63,11 @@ type Step = 'hero' | 'how' | 'photo' | 'location'
 const ITALIAN = (h: number) => (h < 12 && h >= 5 ? 'Buongiorno' : h < 18 && h >= 12 ? 'Buon pomeriggio' : 'Buonasera')
 const HEBREW = (h: number) => (h < 12 && h >= 5 ? 'בוקר טוב' : h < 18 && h >= 12 ? 'צהריים טובים' : 'ערב טוב')
 
-export function Welcome({ full, onDone, onLocation }: {
+export function Welcome({ full, onDone, onLeave, onLocation }: {
   full: boolean
   onDone: () => void
+  /** נקרא ברגע שמתחילים לצאת, כדי שהמפה תתחיל לעוף פנימה במקביל */
+  onLeave: () => void
   onLocation: (share: boolean) => void
 }) {
   const { data, me } = useStore()
@@ -83,9 +85,11 @@ export function Welcome({ full, onDone, onLocation }: {
   const daysToGo = first ? Math.ceil((new Date(`${first.date}T00:00:00+02:00`).getTime() - now.getTime()) / 86400000) : 0
 
   const finish = () => {
+    if (leaving) return
     setLeaving(true)
+    onLeave()
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    setTimeout(onDone, reduce ? 0 : 420)
+    setTimeout(onDone, reduce ? 0 : 900)
   }
   const next = () => {
     if (!full) return finish()
@@ -115,7 +119,7 @@ export function Welcome({ full, onDone, onLocation }: {
         {/* התוכן נגלל אם צריך; הכפתור תמיד נשאר גלוי למטה */}
         <div className="-mx-6 flex min-h-0 flex-1 flex-col overflow-y-auto px-6">
         {step === 'hero' && (
-          <div key="hero" className="flex flex-1 flex-col animate-rise">
+          <div key="hero" className="step-in flex flex-1 flex-col">
             <p className="text-[15px] font-semibold text-terra"><bdi lang="it">{ITALIAN(hour)}</bdi> · {HEBREW(hour)}</p>
             <h1 className="mt-1 text-[clamp(28px,8.5vw,38px)] leading-[1.15]">{me.name},<br />ברוכים הבאים לגארדה</h1>
             <DayLine idx={idx} total={days.length} title={idx >= 0 ? days[idx].title : ''} date={idx >= 0 ? today : ''} daysToGo={daysToGo} />
@@ -123,7 +127,7 @@ export function Welcome({ full, onDone, onLocation }: {
         )}
 
         {step === 'how' && (
-          <div key="how" className="flex flex-1 flex-col animate-rise">
+          <div key="how" className="step-in flex flex-1 flex-col">
             <h2 className="text-[28px] leading-tight">ככה זה עובד</h2>
             <p className="mt-1 text-muted">הכל על מפה אחת. ארבעה כפתורים שכדאי להכיר:</p>
             <ul className="mt-4 space-y-3">
@@ -136,7 +140,7 @@ export function Welcome({ full, onDone, onLocation }: {
         )}
 
         {step === 'photo' && (
-          <div key="photo" className="flex flex-1 flex-col animate-rise">
+          <div key="photo" className="step-in flex flex-1 flex-col">
             <h2 className="text-[28px] leading-tight">תמונה שלך</h2>
             <p className="mt-1 text-muted">כדי שכולם יזהו אותך על המפה ובהודעות.</p>
             <div className="mt-6 flex items-center gap-4">
@@ -150,7 +154,7 @@ export function Welcome({ full, onDone, onLocation }: {
         )}
 
         {step === 'location' && (
-          <div key="location" className="flex flex-1 flex-col animate-rise">
+          <div key="location" className="step-in flex flex-1 flex-col">
             <h2 className="text-[28px] leading-tight">שנראה אחד את השני?</h2>
             <p className="mt-2 text-[17px] leading-relaxed text-muted">
               כששיתוף המיקום פעיל, כולם רואים על המפה איפה כולם. נשמר רק המיקום האחרון, ונמחק אחרי הטיול.
