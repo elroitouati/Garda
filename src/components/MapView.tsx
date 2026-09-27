@@ -3,7 +3,7 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { Place } from '../lib/types'
+import type { Photo, Place } from '../lib/types'
 import { PlaceIcon } from './PlaceIcon'
 
 export type MapHandle = {
@@ -11,6 +11,7 @@ export type MapHandle = {
   flyTo: (p: { lat: number; lng: number }, zoom?: number) => void
   zoomBy: (d: number) => void
   resize: () => void
+  center: () => { lat: number; lng: number } | null
 }
 
 type Props = {
@@ -19,6 +20,9 @@ type Props = {
   selectedId: string | null
   onSelect: (p: Place | null) => void
   bottomPadding: number
+  photos?: Photo[]
+  thumbUrl?: (path: string) => string | null
+  onPhotos?: (ids: string[]) => void
 }
 
 // אחרי bundling הספרייה לא מוצאת לבד את קובץ ה-worker
@@ -80,7 +84,7 @@ function addTerrain(map: maplibregl.Map) {
   }
 }
 
-export const MapView = forwardRef<MapHandle, Props>(function MapView({ places, highlight, selectedId, onSelect, bottomPadding }, ref) {
+export const MapView = forwardRef<MapHandle, Props>(function MapView({ places, highlight, selectedId, onSelect, bottomPadding, photos = [], thumbUrl, onPhotos }, ref) {
   const el = useRef<HTMLDivElement>(null)
   const map = useRef<maplibregl.Map | null>(null)
   const markers = useRef(new Map<string, { m: maplibregl.Marker; el: HTMLDivElement }>())
@@ -107,7 +111,40 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ places, h
     flyTo(p, z) { map.current?.flyTo({ center: [p.lng, p.lat], zoom: z ?? 15, padding: padding(), essential: true }) },
     zoomBy(d) { const m = map.current; if (m) m.easeTo({ zoom: m.getZoom() + d, duration: 300 }) },
     resize() { map.current?.resize() },
+    center() { const c = map.current?.getCenter(); return c ? { lat: c.lat, lng: c.lng } : null },
   }))
+
+  // ── תמונות על המפה: מתאחדות לבועות לפי קרבה על המסך ──
+  const photoMarkers = useRef<maplibregl.Marker[]>([])
+  const photoRef = useRef({ photos, thumbUrl, onPhotos })
+  photoRef.current = { photos, thumbUrl, onPhotos }
+  const drawPhotos = useRef(() => {})
+  drawPhotos.current = () => {
+    const m = map.current
+    if (!m) return
+    photoMarkers.current.forEach((x) => x.remove())
+    photoMarkers.current = []
+    const { photos: list, thumbUrl: url, onPhotos: cb } = photoRef.current
+    const cells = new Map<string, Photo[]>()
+    for (const ph of list) {
+      const pt = m.project([ph.lng, ph.lat])
+      const k = `${Math.floor(pt.x / 64)}:${Math.floor(pt.y / 64)}`
+      cells.set(k, [...(cells.get(k) ?? []), ph])
+    }
+    for (const group of cells.values()) {
+      const lat = group.reduce((a, x) => a + x.lat, 0) / group.length
+      const lng = group.reduce((a, x) => a + x.lng, 0) / group.length
+      const div = document.createElement('button')
+      div.className = 'photo-marker'
+      div.setAttribute('aria-label', `${group.length} תמונות`)
+      const src = url?.(group[0].thumb_path)
+      if (src) { const img = document.createElement('img'); img.src = src; img.alt = ''; div.appendChild(img) }
+      if (group.length > 1) { const b = document.createElement('span'); b.className = 'photo-count tnum'; b.textContent = String(group.length); div.appendChild(b) }
+      div.addEventListener('click', (ev) => { ev.stopPropagation(); cb?.(group.map((x) => x.id)) })
+      photoMarkers.current.push(new maplibregl.Marker({ element: div }).setLngLat([lng, lat]).addTo(m))
+    }
+  }
+  useEffect(() => { drawPhotos.current() }, [photos, thumbUrl])
 
   useEffect(() => {
     if (!el.current) return
@@ -128,7 +165,9 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ places, h
     m.on('style.load', () => { recolor(m); addTerrain(m) })
     m.on('error', (e) => console.warn('map', e.error?.message))
     m.on('zoom', () => setZoom(m.getZoom()))
-    m.on('click', (e) => { if (!(e.originalEvent.target as HTMLElement).closest('.place-marker')) onSelectRef.current(null) })
+    m.on('moveend', () => drawPhotos.current())
+    m.on('load', () => drawPhotos.current())
+    m.on('click', (e) => { if (!(e.originalEvent.target as HTMLElement).closest('.place-marker, .photo-marker')) onSelectRef.current(null) })
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
     const onScheme = () => recolor(m)
     mq.addEventListener('change', onScheme)

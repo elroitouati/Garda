@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { TripData } from './types'
+import type { LiveData, Message, Photo, TripData } from './types'
 
 export type PickMember = { id: string; name: string; color: string; initials: string | null }
 export type RpcResult = { ok?: boolean; error?: string; members?: PickMember[] }
@@ -14,12 +14,21 @@ export interface Api {
   switchMember(memberId: string): Promise<RpcResult>
   signOut(): Promise<void>
   fetchAll(): Promise<TripData>
-  signAvatars(paths: string[]): Promise<Record<string, string>>
+  sign(bucket: 'avatars' | 'photos', paths: string[]): Promise<Record<string, string>>
   uploadAvatar(memberId: string, blob: Blob): Promise<void>
   upsert(table: Table, row: Record<string, unknown>): Promise<void>
   remove(table: Table, key: string, value: string): Promise<void>
   setPin(pin: string): Promise<RpcResult>
   subscribe(onChange: () => void): () => void
+  // הודעות ותמונות
+  fetchLive(): Promise<LiveData>
+  sendMessage(m: Omit<Message, 'id' | 'created_at' | 'reminded_at'>): Promise<void>
+  markRead(messageId: string, memberId: string): Promise<void>
+  remind(messageId: string): Promise<void>
+  uploadPhoto(memberId: string, full: Blob, thumb: Blob, meta: Pick<Photo, 'lat' | 'lng' | 'loc_source' | 'taken_at' | 'width' | 'height'>): Promise<void>
+  movePhoto(id: string, lat: number, lng: number): Promise<void>
+  deletePhoto(p: Photo): Promise<void>
+  subscribeLive(onChange: () => void): () => void
 }
 
 function must<T>(r: { data: T | null; error: unknown }): T {
@@ -79,9 +88,9 @@ const realApi = (): Api => {
         fetchedAt: Date.now(),
       }
     },
-    async signAvatars(paths) {
+    async sign(bucket, paths) {
       if (!paths.length) return {}
-      const r = await sb.storage.from('avatars').createSignedUrls(paths, 60 * 60 * 24 * 7)
+      const r = await sb.storage.from(bucket).createSignedUrls(paths, 60 * 60 * 24 * 7)
       const out: Record<string, string> = {}
       for (const x of r.data ?? []) if (x.path && x.signedUrl) out[x.path] = x.signedUrl
       return out
@@ -105,6 +114,47 @@ const realApi = (): Api => {
     subscribe(onChange) {
       const ch = sb.channel('trip-changes')
       for (const table of ['members', 'households', 'places', 'days', 'activities'])
+        ch.on('postgres_changes', { event: '*', schema: 'public', table }, onChange)
+      ch.subscribe()
+      return () => { sb.removeChannel(ch) }
+    },
+    async fetchLive() {
+      const since = new Date(Date.now() - 4 * 86400000).toISOString()
+      const [messages, reads, photos] = await Promise.all([
+        sb.from('messages').select('*').gte('created_at', since).order('created_at', { ascending: false }),
+        sb.from('message_reads').select('*').gte('read_at', since),
+        sb.from('photos').select('*').order('taken_at', { ascending: false }),
+      ])
+      return { messages: must(messages), reads: must(reads), photos: must(photos) }
+    },
+    async sendMessage(m) {
+      must(await sb.from('messages').insert(m))
+    },
+    async markRead(messageId, memberId) {
+      must(await sb.from('message_reads').upsert({ message_id: messageId, member_id: memberId, read_at: new Date().toISOString() }))
+    },
+    async remind(messageId) {
+      must(await sb.rpc('remind_message', { message_id: messageId }))
+    },
+    async uploadPhoto(memberId, full, thumb, meta) {
+      const id = crypto.randomUUID()
+      const path = `${memberId}/${id}.jpg`
+      const thumb_path = `${memberId}/${id}_t.jpg`
+      const opts = { contentType: 'image/jpeg', cacheControl: '31536000' }
+      must(await sb.storage.from('photos').upload(path, full, opts))
+      must(await sb.storage.from('photos').upload(thumb_path, thumb, opts))
+      must(await sb.from('photos').insert({ id, member_id: memberId, path, thumb_path, ...meta }))
+    },
+    async movePhoto(id, lat, lng) {
+      must(await sb.from('photos').update({ lat, lng, loc_source: 'manual' }).eq('id', id))
+    },
+    async deletePhoto(p) {
+      must(await sb.from('photos').delete().eq('id', p.id))
+      await sb.storage.from('photos').remove([p.path, p.thumb_path])
+    },
+    subscribeLive(onChange) {
+      const ch = sb.channel('live-changes')
+      for (const table of ['messages', 'message_reads', 'photos'])
         ch.on('postgres_changes', { event: '*', schema: 'public', table }, onChange)
       ch.subscribe()
       return () => { sb.removeChannel(ch) }

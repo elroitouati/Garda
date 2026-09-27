@@ -86,3 +86,35 @@ export type TripData = {
   emergency: EmergencyContact[]
   fetchedAt: number
 }
+
+export type Message = {
+  id: string
+  sender_id: string
+  body: string
+  important: boolean
+  audience: 'all' | 'household' | 'custom'
+  household_id: string | null
+  recipients: string[] | null
+  lat: number | null
+  lng: number | null
+  reminded_at: string | null
+  created_at: string
+}
+
+export type MessageRead = { message_id: string; member_id: string; read_at: string }
+
+export type Photo = {
+  id: string
+  member_id: string
+  path: string
+  thumb_path: string
+  lat: number
+  lng: number
+  loc_source: 'device' | 'exif' | 'schedule' | 'manual'
+  taken_at: string
+  width: number | null
+  height: number | null
+  created_at: string
+}
+
+export type LiveData = { messages: Message[]; reads: MessageRead[]; photos: Photo[] }

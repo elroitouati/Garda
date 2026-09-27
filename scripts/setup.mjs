@@ -8,7 +8,7 @@
 // שימוש: npm run setup
 import { execSync } from 'node:child_process'
 import { randomBytes, randomInt } from 'node:crypto'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 
 const NAME = 'tuati-garda'
 const SB = process.env.SUPABASE_ACCESS_TOKEN
@@ -65,12 +65,20 @@ const sql = async (query, what) => {
     await sleep(5000)
   }
 }
-const exists = await sql(`select to_regclass('public.members') is not null as ok`, 'בדיקת טבלאות')
-if (!exists?.[0]?.ok) {
-  log('מריץ סכמה ו-seed…')
-  await sql(readFileSync('supabase/migrations/0001_schema.sql', 'utf8'), 'סכמה')
-  await sql(readFileSync('supabase/migrations/0002_seed.sql', 'utf8'), 'seed')
-} else log('הטבלאות כבר קיימות, מדלג על seed')
+// מריץ כל קובץ migration פעם אחת בלבד, לפי הסדר
+await sql(`create schema if not exists private; create table if not exists private.applied_migrations (name text primary key, at timestamptz default now())`, 'טבלת migrations')
+const applied = new Set((await sql(`select name from private.applied_migrations`, 'migrations שרצו')).map((r) => r.name))
+// התקנה ישנה בלי מעקב: הסכמה וה-seed כבר קיימים
+if (!applied.size && (await sql(`select to_regclass('public.members') is not null as ok`, 'בדיקת טבלאות'))?.[0]?.ok) {
+  for (const n of ['0001_schema.sql', '0002_seed.sql']) applied.add(n)
+  await sql(`insert into private.applied_migrations(name) values ('0001_schema.sql'), ('0002_seed.sql') on conflict do nothing`, 'סימון')
+}
+for (const name of readdirSync('supabase/migrations').filter((f) => f.endsWith('.sql')).sort()) {
+  if (applied.has(name)) continue
+  log('מריץ', name)
+  await sql(readFileSync(`supabase/migrations/${name}`, 'utf8'), name)
+  await sql(`insert into private.applied_migrations(name) values ('${name}')`, 'סימון migration')
+}
 
 must(await sb('PATCH', `/v1/projects/${ref}/config/auth`, { external_anonymous_users_enabled: true }), 'הפעלת כניסה אנונימית')
 log('כניסה אנונימית פעילה')
