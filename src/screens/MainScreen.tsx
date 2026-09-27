@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Avatar } from '../components/Avatar'
 import { BottomSheet, type Snap } from '../components/BottomSheet'
 import { Gallery } from '../components/Gallery'
+import { Welcome } from '../components/Welcome'
 import { FridayCard, LocationConsent, LocationHelp, MeetingCard, MeetingComposer, MeetingPopup, PushCard, ShabbatScreen, TipCard, useWalkingRoute } from '../components/Live'
 import { ComposeSheet, MessageHistory, MessagePopups } from '../components/Messages'
 import { MapView, type MapHandle, type MapMeeting, type MapPerson } from '../components/MapView'
@@ -40,6 +41,7 @@ export function MainScreen() {
   const [weather, setWeather] = useState<Record<string, DayWeather>>({})
   const [overlay, setOverlay] = useState<'settings' | 'emergency' | null>(null)
   const [avatarPrompt, setAvatarPrompt] = useState(false)
+  const [welcome, setWelcome] = useState<'full' | 'daily' | null>(null)
   const [compose, setCompose] = useState(false)
   const [cameraMenu, setCameraMenu] = useState(false)
   const [gallery, setGallery] = useState<{ ids: string[] | null; start: number } | null>(null)
@@ -106,6 +108,23 @@ export function MainScreen() {
   const familyMembers = useMemo(() => (data?.members ?? []).filter((m) => m.active), [data])
 
   useEffect(() => { if (data) void fetchWeather(data.days, data.places).then(setWeather) }, [data])
+
+  // מסך פתיחה: מלא בפעם הראשונה בטלפון, ובכל בוקר רק הפוסטר עם תוכנית היום
+  useEffect(() => {
+    if (!me) return
+    try {
+      if (!localStorage.getItem(`garda-onboarded-${me.id}`)) setWelcome('full')
+      else if (localStorage.getItem('garda-welcome-day') !== romeDate(new Date())) setWelcome('daily')
+    } catch { /* ignore */ }
+  }, [me?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  const closeWelcome = () => {
+    try {
+      if (me) { localStorage.setItem(`garda-onboarded-${me.id}`, '1'); localStorage.setItem(`garda-avatar-skip-${me.id}`, '1') }
+      localStorage.setItem('garda-welcome-day', romeDate(new Date()))
+    } catch { /* ignore */ }
+    if (welcome === 'full') setAvatarPrompt(false)
+    setWelcome(null)
+  }
 
   // תמונת פרופיל בכניסה הראשונה
   useEffect(() => {
@@ -443,11 +462,17 @@ export function MainScreen() {
         <p className="px-5 pb-10 pt-8 text-center text-sm text-muted">שבוע טוב ומהנה, משפחת טואטי</p>
       </BottomSheet>
 
-      <MessagePopups onShowOnMap={(lat, lng) => { setSnap(0); mapRef.current?.flyTo({ lat, lng }, 16) }} />
-      {newMeeting && <MeetingPopup meeting={newMeeting} onClose={() => markMeetingSeen(newMeeting.id)}
+      {welcome && (
+        <Welcome full={welcome === 'full'} onDone={closeWelcome} onLocation={(share) => {
+          if (share) { navigator.geolocation?.getCurrentPosition(() => {}, () => {}, { enableHighAccuracy: true, timeout: 20000 }); loc.setConsent('yes') }
+          else loc.setConsent('no')
+        }} />
+      )}
+      {!welcome && <MessagePopups onShowOnMap={(lat, lng) => { setSnap(0); mapRef.current?.flyTo({ lat, lng }, 16) }} />}
+      {newMeeting && !welcome && <MeetingPopup meeting={newMeeting} onClose={() => markMeetingSeen(newMeeting.id)}
         onShow={() => { markMeetingSeen(newMeeting.id); setSnap(0); mapRef.current?.fit([newMeeting, ...people.filter((p) => p.isMe)], { maxZoom: 17 }) }} />}
-      {tip && <TipCard title={tip.title} body={tip.body} onClose={() => setTip(null)} />}
-      {loc.consent === null && !avatarPrompt && (
+      {tip && !welcome && <TipCard title={tip.title} body={tip.body} onClose={() => setTip(null)} />}
+      {loc.consent === null && !avatarPrompt && !welcome && (
         <LocationConsent
           onYes={() => {
             // הבקשה יוצאת מתוך הלחיצה עצמה (דרישה של iOS)
@@ -476,7 +501,7 @@ export function MainScreen() {
       )}
       {overlay === 'settings' && <Settings onClose={() => setOverlay(null)} />}
       {overlay === 'emergency' && <EmergencyCard onClose={() => setOverlay(null)} />}
-      {avatarPrompt && me && (
+      {avatarPrompt && me && !welcome && (
         <AvatarSetup
           member={me}
           onDone={() => setAvatarPrompt(false)}

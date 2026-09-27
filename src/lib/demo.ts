@@ -48,7 +48,7 @@ function parseSeed(): Record<string, Record<string, unknown>[]> {
     const rows = parseValues(m[3]).map((vals) => Object.fromEntries(cols.map((c, k) => [c, vals[k]])))
     out[m[1]] = (out[m[1]] ?? []).concat(rows)
   }
-  const up = /update public\.members set initials = '(\w+)' where id = '(\w+)'/g
+  const up = /update public\.members set initials = '([^']+)' where id = '(\w+)'/g
   while ((m = up.exec(noComments))) {
     const mem = out.members.find((x) => x.id === m![2])
     if (mem) mem.initials = m[1]
