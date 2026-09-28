@@ -4,7 +4,8 @@ import { googleLink, wazeLink } from '../lib/nav'
 import type { Timed } from '../lib/schedule'
 import { hm, shortDate, weekdayLetter } from '../lib/time'
 import { ago, distance, formatDistance, isStale, type LatLng } from '../lib/geo'
-import type { Day, Essential, Location, Member, Place } from '../lib/types'
+import type { Day, Essential, Household, Location, Member, Place } from '../lib/types'
+import { groupByHousehold } from '../lib/members'
 import type { DayWeather } from '../lib/weather'
 import { Avatar } from './Avatar'
 import { PlaceIcon } from './PlaceIcon'
@@ -20,11 +21,15 @@ export function SectionTitle({ children, action }: { children: React.ReactNode; 
 }
 
 // ── המשפחה ──
-export function FamilyStrip({ members, meId, locations, myPos, onTap }: {
-  members: Member[]; meId: string | null; locations: Location[]; myPos: LatLng | null; onTap: (m: Member) => void
+export function FamilyStrip({ members, households, meId, locations, myPos, onTap }: {
+  members: Member[]; households: Household[]; meId: string | null; locations: Location[]; myPos: LatLng | null; onTap: (m: Member) => void
 }) {
-  const sorted = [...members].sort((a, b) => (a.id === meId ? -1 : b.id === meId ? 1 : a.sort - b.sort))
   if (!members.length) return <p className="px-5 text-muted">עוד אין משתתפים. מנהל יכול להוסיף במסך הניהול.</p>
+  const myHh = members.find((m) => m.id === meId)?.household_id
+  const groups = groupByHousehold(
+    [...members].sort((a, b) => (a.id === meId ? -1 : b.id === meId ? 1 : a.sort - b.sort)),
+    (m) => m.household_id, households, myHh,
+  )
   const status = (m: Member) => {
     const l = locations.find((x) => x.member_id === (m.guardian_id ?? m.id))
     if (m.guardian_id) return { text: `עם ${members.find((x) => x.id === m.guardian_id)?.name ?? 'מבוגר'}`, dim: !l }
@@ -34,17 +39,26 @@ export function FamilyStrip({ members, meId, locations, myPos, onTap }: {
     return { text: `${ago(l.updated_at)}${d}`, dim: isStale(l.updated_at) }
   }
   return (
-    <div className="no-scrollbar flex gap-3 overflow-x-auto px-5 pb-1" style={{ touchAction: 'pan-x' }}>
-      {sorted.map((m) => {
-        const st = status(m)
-        return (
-          <button key={m.id} className="flex w-[76px] shrink-0 flex-col items-center gap-1 text-center" onClick={() => onTap(m)}>
-            <Avatar member={m} size={52} ring={m.id === meId} dim={'grey' in st && st.grey} className={st.dim ? 'opacity-60' : ''} />
-            <span className="w-full truncate text-[14px] font-semibold leading-tight">{m.id === meId ? 'אני' : m.name}</span>
-            <span className="tnum w-full truncate text-[12px] leading-tight text-muted">{st.text}</span>
-          </button>
-        )
-      })}
+    <div className="no-scrollbar flex gap-4 overflow-x-auto px-5 pb-1" style={{ touchAction: 'pan-x' }}>
+      {groups.map((g, gi) => (
+        <div key={g.id || 'rest'} className={`flex shrink-0 flex-col gap-2 ${gi ? 'border-s border-line ps-4' : ''}`}>
+          {groups.length > 1 && (
+            <span className="truncate text-[13px] font-semibold text-muted">{g.id && g.id === myHh ? 'המשפחה שלי' : g.name || 'אחרים'}</span>
+          )}
+          <div className="flex gap-3">
+            {g.members.map((m) => {
+              const st = status(m)
+              return (
+                <button key={m.id} className="flex w-[76px] shrink-0 flex-col items-center gap-1 text-center" onClick={() => onTap(m)}>
+                  <Avatar member={m} size={52} ring={m.id === meId} dim={'grey' in st && st.grey} className={st.dim ? 'opacity-60' : ''} />
+                  <span className="w-full truncate text-[14px] font-semibold leading-tight">{m.id === meId ? 'אני' : m.name}</span>
+                  <span className="tnum w-full truncate text-[12px] leading-tight text-muted">{st.text}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

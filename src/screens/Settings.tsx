@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Avatar } from '../components/Avatar'
 import { Overlay } from '../components/Overlay'
 import { useToast } from '../components/Toast'
+import { groupByHousehold } from '../lib/members'
 import { useStore } from '../lib/store'
 import { Admin } from './Admin'
 import { AvatarSetup } from './AvatarSetup'
@@ -22,18 +23,25 @@ export function Settings({ onClose }: { onClose: () => void }) {
     return (
       <Overlay title="החלף משתמש" onClose={() => setView('main')}>
         <p className="px-5 pt-4 text-muted">מי משתמש בטלפון הזה?</p>
-        <div className="grid grid-cols-3 gap-x-3 gap-y-5 p-5">
-          {data.members.filter((m) => m.active && !m.guardian_id).map((m) => (
-            <button key={m.id} disabled={busy} className="flex flex-col items-center gap-2" onClick={async () => {
-              if (!api) return
-              setBusy(true)
-              const r = await api.switchMember(m.id)
-              setBusy(false)
-              if (r.ok) { await enter(m.id); toast(`שלום ${m.name}`); onClose() } else toast('לא הצלחתי להחליף. בדוק קליטה.')
-            }}>
-              <Avatar member={m} size={68} ring={m.id === me.id} />
-              <span className="font-semibold">{m.name}</span>
-            </button>
+        <div className="space-y-5 p-5">
+          {groupByHousehold(data.members.filter((m) => m.active && !m.guardian_id), (m) => m.household_id, data.households, me.household_id).map((g) => (
+            <section key={g.id || 'rest'}>
+              {data.households.length > 1 && g.name && <h2 className="mb-3 text-[15px] font-semibold text-muted">{g.name}</h2>}
+              <div className="grid grid-cols-3 gap-x-3 gap-y-5">
+                {g.members.map((m) => (
+                  <button key={m.id} disabled={busy} className="flex flex-col items-center gap-2" onClick={async () => {
+                    if (!api) return
+                    setBusy(true)
+                    const r = await api.switchMember(m.id)
+                    setBusy(false)
+                    if (r.ok) { await enter(m.id); toast(`שלום ${m.name}`); onClose() } else toast('לא הצלחתי להחליף. בדוק קליטה.')
+                  }}>
+                    <Avatar member={m} size={68} ring={m.id === me.id} />
+                    <span className="font-semibold">{m.name}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
           ))}
         </div>
       </Overlay>

@@ -55,7 +55,7 @@ export type Activity = {
 export type EssentialField = { label: string; value: string; copy?: boolean }
 export type Essential = {
   id: string
-  household_id: string
+  household_id: string | null // null = משותף לכולם
   kind: 'flight' | 'car' | 'hotel' | 'insurance' | 'other'
   title: string
   subtitle: string | null

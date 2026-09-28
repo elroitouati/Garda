@@ -1,7 +1,7 @@
 import { supabase } from './supabase'
 import type { LiveData, Location, Meeting, Message, Photo, TripData } from './types'
 
-export type PickMember = { id: string; name: string; color: string; initials: string | null }
+export type PickMember = { id: string; name: string; color: string; initials: string | null; household?: string | null }
 export type RpcResult = { ok?: boolean; error?: string; members?: PickMember[] }
 
 type Table = 'households' | 'members' | 'places' | 'days' | 'activities' | 'essentials' | 'emergency_contacts'

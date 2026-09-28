@@ -66,7 +66,7 @@ export function demoApi(): Api {
     places: s.places as never,
     days: s.days as never,
     activities: s.activities.map((x) => ({ id: id(), household_id: null, ...x })) as never,
-    essentials: s.essentials.map((x) => ({ id: id(), ...x, fields: JSON.parse(x.fields as string) })) as never,
+    essentials: s.essentials.map((x) => ({ id: id(), ...x, household_id: null, fields: JSON.parse(x.fields as string) })) as never,
     emergency: s.emergency_contacts.map((x) => ({ id: id(), member_id: x.name === 'יתיר' ? 'yatir' : x.name === 'שרון' ? 'sharon' : null, ...x })) as never,
     shabbat: { id: 1, title: 'שבת ושמיני עצרת', candles: '2026-10-02T18:36:00+02:00', havdalah: '2026-10-03T19:38:00+02:00' },
     fetchedAt: Date.now(),
@@ -102,7 +102,7 @@ export function demoApi(): Api {
     async sessionMember() { return localStorage.getItem('garda-demo-me') },
     async checkPin(pin) {
       if (pin !== PIN.v) return { error: 'bad_pin' }
-      return { members: db.members.filter((m) => !m.guardian_id).map(({ id, name, color, initials }) => ({ id, name, color, initials })) }
+      return { members: db.members.filter((m) => !m.guardian_id).map(({ id, name, color, initials, household_id }) => ({ id, name, color, initials, household: db.households.find((h) => h.id === household_id)?.name ?? null })) }
     },
     async join(pin, memberId) {
       if (pin !== PIN.v) return { error: 'bad_pin' }

@@ -151,7 +151,7 @@ export function MainScreen() {
   const rainPlaces = useMemo(() => (data?.places ?? []).filter((p) => p.rain_plan), [data])
   const dayObj = data?.days.find((d) => d.date === day)
   const dayIndex = data?.days.findIndex((d) => d.date === day) ?? -1
-  const myEssentials = useMemo(() => (data?.essentials ?? []).filter((e) => e.household_id === me?.household_id), [data, me])
+  const myEssentials = useMemo(() => (data?.essentials ?? []).filter((e) => !e.household_id || e.household_id === me?.household_id), [data, me])
   const familyMembers = useMemo(() => (data?.members ?? []).filter((m) => m.active), [data])
 
   useEffect(() => { if (data) void fetchWeather(data.days, data.places).then(setWeather) }, [data])
@@ -532,7 +532,7 @@ export function MainScreen() {
               </div>
               {(loc.state === 'denied' || loc.state === 'unavailable') && !locHelpHidden && <LocationHelp state={loc.state} onClose={() => setLocHelpHidden(true)} />}
               <div className="mt-4">
-                <FamilyStrip members={familyMembers} meId={meId} locations={live.locations} myPos={loc.pos} onTap={(m) => {
+                <FamilyStrip members={familyMembers} households={data.households} meId={meId} locations={live.locations} myPos={loc.pos} onTap={(m) => {
                   const p = people.find((x) => x.id === m.id)
                   if (p) { setSnap(0); mapRef.current?.flyTo(p, 16) }
                   else toast(`${m.name} עוד לא משתף מיקום`)

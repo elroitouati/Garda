@@ -69,12 +69,19 @@ export function PinScreen() {
           <h1 className="text-center text-[30px]">מי אתה?</h1>
           <p className="mt-1 text-center text-muted">לחץ על עצמך. הטלפון יזכור אותך.</p>
           {err && <p role="alert" className="mt-4 rounded-2xl bg-terraSoft p-3 text-center font-semibold text-terra">{err}</p>}
-          <div className="mt-8 grid grid-cols-3 gap-x-3 gap-y-6">
-            {members.map((m) => (
-              <button key={m.id} disabled={busy} className="flex flex-col items-center gap-2 rounded-2xl p-1 active:scale-95 transition" onClick={() => pick(m)}>
-                <Avatar member={m} size={76} />
-                <span className="text-[17px] font-semibold">{m.name}</span>
-              </button>
+          <div className="mt-6 space-y-6 pb-6">
+            {groupPicks(members).map((g) => (
+              <section key={g.name}>
+                {g.name && <h2 className="mb-3 text-center text-[15px] font-semibold text-muted">{g.name}</h2>}
+                <div className="grid grid-cols-3 gap-x-3 gap-y-5">
+                  {g.members.map((m) => (
+                    <button key={m.id} disabled={busy} className="flex flex-col items-center gap-2 rounded-2xl p-1 active:scale-95 transition" onClick={() => pick(m)}>
+                      <Avatar member={m} size={76} />
+                      <span className="text-[17px] font-semibold">{m.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </section>
             ))}
           </div>
         </div>
@@ -118,4 +125,16 @@ export function PinScreen() {
       <p className="pb-4 text-center text-sm text-muted">אין קוד? בקש מיתיר או מאלרואי.</p>
     </main>
   )
+}
+
+/** השרת מחזיר את הרשימה כבר מסודרת לפי משפחה */
+function groupPicks(list: PickMember[]) {
+  const out: { name: string; members: PickMember[] }[] = []
+  for (const m of list) {
+    const name = m.household ?? ''
+    const last = out[out.length - 1]
+    if (last && last.name === name) last.members.push(m)
+    else out.push({ name, members: [m] })
+  }
+  return out
 }

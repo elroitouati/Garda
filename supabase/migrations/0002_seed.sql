@@ -1,7 +1,8 @@
 -- טואטי בגארדה — נתוני פתיחה (seed)
 -- קואורדינטות אומתו מול OpenStreetMap/Nominatim ב-26.9.2026. אפשר לאמת שוב מול Mapbox: npm run geocode
 
-insert into public.households (id, name, sort) values ('tuati', 'משפחת טואטי', 0);
+insert into public.households (id, name, sort) values
+  ('tuati', 'יתיר ושרון', 0), ('efi', 'אפי ויפית', 1), ('eyal', 'אייל ויערה', 2), ('gil', 'גיל, אווה וליאל', 3);
 
 insert into public.members (id, name, color, household_id, is_admin, sort) values
   ('yatir',  'יתיר',    '#C2573A', 'tuati', true,  1),
@@ -9,15 +10,15 @@ insert into public.members (id, name, color, household_id, is_admin, sort) value
   ('shiilo', 'שיילו',   '#2F6FB0', 'tuati', false, 3),
   ('elroi',  'אלרואי',  '#1F8A8A', 'tuati', true,  4),
   ('etel',   'אתאל',    '#9A6B12', 'tuati', false, 5),
-  ('gil',    'סבא גיל', '#5B6F2E', 'tuati', false, 6),
-  ('eva',    'אווה',    '#A0522D', 'tuati', false, 7),
-  ('efi',    'אפי',     '#3F5FA8', 'tuati', false, 8),
-  ('eyal',   'אייל',    '#B7791F', 'tuati', false, 9),
-  ('yaara',  'יערה',    '#8E3B8E', 'tuati', false, 10),
-  ('liel',   'ליאל',    '#C04A6A', 'tuati', false, 11),
-  ('lia',    'ליה',     '#6B6FB0', 'tuati', false, 12),
-  ('yafit',  'יפית',    '#476E7A', 'tuati', false, 13),
-  ('shanel', 'שנאל',    '#9C3D3D', 'tuati', false, 14);
+  ('shanel', 'שנאל',    '#9C3D3D', 'tuati', false, 6),
+  ('efi',    'אפי',     '#3F5FA8', 'efi',   false, 7),
+  ('yafit',  'יפית',    '#476E7A', 'efi',   false, 8),
+  ('lia',    'ליה',     '#6B6FB0', 'efi',   false, 9),
+  ('eyal',   'אייל',    '#B7791F', 'eyal',  false, 10),
+  ('yaara',  'יערה',    '#8E3B8E', 'eyal',  false, 11),
+  ('gil',    'סבא גיל', '#5B6F2E', 'gil',   false, 12),
+  ('eva',    'אווה',    '#A0522D', 'gil',   false, 13),
+  ('liel',   'ליאל',    '#C04A6A', 'gil',   false, 14);
 update public.members set initials = 'סג' where id = 'gil';
 update public.members set initials = 'לל' where id = 'liel';
 update public.members set initials = 'לה' where id = 'lia';
