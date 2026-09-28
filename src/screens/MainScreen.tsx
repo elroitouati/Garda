@@ -123,7 +123,7 @@ export function MainScreen() {
     for (const f of arr) {
       let prep: Awaited<ReturnType<typeof preparePhoto>> | null = null
       try {
-        prep = await preparePhoto(f, source, list, hotel)
+        prep = await preparePhoto(f, source, list, hotel, loc.sharing && phase !== 'shabbat')
         await api.uploadPhoto(me.id, prep.full, prep.thumb, prep.meta)
         if (prep.meta.loc_source === 'schedule') bySchedule++
         done++
@@ -581,7 +581,7 @@ export function MainScreen() {
           setPhoneLater(true)
         }} />
       )}
-      {compose && <ComposeSheet onClose={() => setCompose(false)} />}
+      {compose && <ComposeSheet onClose={() => setCompose(false)} shareLocation={loc.sharing} />}
       {cameraMenu && (
         <div className="fixed inset-0 z-[75] flex items-end bg-black/40" onClick={() => setCameraMenu(false)}>
           <div className="w-full rounded-t-[28px] bg-surface p-5 pb-[calc(20px+var(--safe-bottom))] animate-rise" onClick={(e) => e.stopPropagation()}>

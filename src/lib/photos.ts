@@ -30,7 +30,8 @@ function fromSchedule(t: Date, list: Timed[], hotel: Place | undefined) {
   return p ? { lat: p.lat, lng: p.lng } : null
 }
 
-export async function preparePhoto(file: File, source: 'camera' | 'gallery', list: Timed[], hotel: Place | undefined): Promise<Prepared> {
+/** allowGps: רק כששיתוף המיקום שלי פעיל משתמשים ב-GPS; אחרת התמונה ממוקמת לפי הלו"ז */
+export async function preparePhoto(file: File, source: 'camera' | 'gallery', list: Timed[], hotel: Place | undefined, allowGps: boolean): Promise<Prepared> {
   let lat: number | null = null, lng: number | null = null
   let loc: Photo['loc_source'] = 'device'
   let taken = new Date(file.lastModified || Date.now())
@@ -39,10 +40,10 @@ export async function preparePhoto(file: File, source: 'camera' | 'gallery', lis
   try {
     const ex = await exifr.parse(file, { gps: true, pick: ['DateTimeOriginal', 'latitude', 'longitude'] })
     if (ex?.DateTimeOriginal instanceof Date && !isNaN(+ex.DateTimeOriginal)) taken = ex.DateTimeOriginal
-    if (typeof ex?.latitude === 'number' && typeof ex?.longitude === 'number') { lat = ex.latitude; lng = ex.longitude; loc = 'exif' }
+    if (allowGps && typeof ex?.latitude === 'number' && typeof ex?.longitude === 'number') { lat = ex.latitude; lng = ex.longitude; loc = 'exif' }
   } catch { /* אין EXIF */ }
 
-  if (lat == null && source === 'camera') {
+  if (lat == null && source === 'camera' && allowGps) {
     const pos = await currentPosition()
     if (pos) { lat = pos.lat; lng = pos.lng; loc = 'device'; taken = new Date() }
   }

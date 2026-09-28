@@ -86,7 +86,7 @@ function Stamp({ member, time }: { member?: Member; time: string }) {
 }
 
 // ── כתיבת הודעה ─────────────────────────────────────────────
-export function ComposeSheet({ onClose }: { onClose: () => void }) {
+export function ComposeSheet({ onClose, shareLocation }: { onClose: () => void; shareLocation: boolean }) {
   const { me, data, api, refreshLive } = useStore()
   const toast = useToast()
   const [body, setBody] = useState('')
@@ -103,7 +103,8 @@ export function ComposeSheet({ onClose }: { onClose: () => void }) {
     if (!t || !api) return
     if (audience === 'custom' && !picked.length) { setErr('בחר למי לשלוח'); return }
     setBusy(true); setErr(null)
-    const pos = await currentPositionIfAllowed()
+    // מצרפים מיקום להודעה רק אם שיתוף המיקום שלי פעיל
+    const pos = shareLocation ? await currentPositionIfAllowed() : null
     try {
       await api.sendMessage({
         sender_id: me.id, body: t, important, audience,

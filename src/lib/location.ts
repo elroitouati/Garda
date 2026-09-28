@@ -5,12 +5,22 @@ import { useStore } from './store'
 export type Consent = 'yes' | 'no' | null
 export type GeoState = 'off' | 'waiting' | 'on' | 'denied' | 'unavailable'
 
-const KEY = 'garda-location-consent'
+// ההסכמה שמורה לכל בן משפחה בנפרד: מי שנכנס לטלפון של מישהו אחר לא "יורש" את השיתוף שלו
+const LEGACY_KEY = 'garda-location-consent'
+const keyFor = (memberId: string) => `garda-location-consent-${memberId}`
 const MIN_MOVE = 25 // מטר
 const MIN_INTERVAL = 30_000 // מ"ש
 
-function readConsent(): Consent {
-  try { return (localStorage.getItem(KEY) as Consent) ?? null } catch { return null }
+function readConsent(memberId: string | undefined): Consent {
+  if (!memberId) return null
+  try {
+    const own = localStorage.getItem(keyFor(memberId)) as Consent
+    if (own) return own
+    // מעבר מהגרסה הקודמת: ההסכמה הכללית שייכת למי שמחובר עכשיו, ורק לו
+    const legacy = localStorage.getItem(LEGACY_KEY) as Consent
+    if (legacy) { localStorage.setItem(keyFor(memberId), legacy); localStorage.removeItem(LEGACY_KEY) }
+    return legacy ?? null
+  } catch { return null }
 }
 
 /**
@@ -18,18 +28,23 @@ function readConsent(): Consent {
  * שולחים לשרת רק כשזזים מעל 25 מ' או כל 30 שניות, כדי לחסוך בסוללה.
  */
 export function useLocationSharing(paused: boolean) {
-  const { api, me, live } = useStore()
-  const [consent, setConsentState] = useState<Consent>(readConsent)
+  const { api, me, live, liveReady } = useStore()
+  const [consent, setConsentState] = useState<Consent>(() => readConsent(me?.id))
+  useEffect(() => { setConsentState(readConsent(me?.id)) }, [me?.id])
   const [state, setState] = useState<GeoState>('off')
   const [pos, setPos] = useState<(LatLng & { heading: number | null; accuracy: number }) | null>(null)
   const last = useRef<{ p: LatLng; t: number } | null>(null)
   const mine = live.locations.find((l) => l.member_id === me?.id)
-  const sharing = consent === 'yes' && (mine ? mine.sharing : true)
+  // לא מניחים כלום לפני שיודעים מה בחרת: עד שהשרת עונה, לא שולחים מיקום
+  const sharing = consent === 'yes' && liveReady && (mine ? mine.sharing : true)
+  // עוצרים ומנתקים: אם כבר לא משתפים, לא שולחים יותר כלום
+  useEffect(() => { if (!sharing) { last.current = null; setPos(null) } }, [sharing])
 
   const setConsent = useCallback((c: Consent) => {
-    try { if (c) localStorage.setItem(KEY, c); else localStorage.removeItem(KEY) } catch { /* ignore */ }
+    if (!me) return
+    try { if (c) localStorage.setItem(keyFor(me.id), c); else localStorage.removeItem(keyFor(me.id)) } catch { /* ignore */ }
     setConsentState(c)
-  }, [])
+  }, [me?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!api || !me || !sharing || paused) { setState('off'); return }
@@ -57,12 +72,10 @@ export function useLocationSharing(paused: boolean) {
   /** מתג "שתף מיקום" */
   const setSharing = useCallback(async (on: boolean) => {
     if (!api || !me) return
-    if (on) setConsent('yes')
+    setConsent(on ? 'yes' : 'no')
     last.current = null
-    await api.saveLocation({
-      member_id: me.id, lat: mine?.lat ?? pos?.lat ?? null, lng: mine?.lng ?? pos?.lng ?? null,
-      accuracy: mine?.accuracy ?? null, heading: null, sharing: on,
-    })
+    // השהיה מוחקת גם את המיקום האחרון מהשרת
+    await api.saveLocation({ member_id: me.id, lat: null, lng: null, accuracy: null, heading: null, sharing: on })
   }, [api, me, mine, pos, setConsent])
 
   return { consent, setConsent, state, pos, sharing, setSharing }

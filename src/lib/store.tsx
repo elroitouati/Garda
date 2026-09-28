@@ -15,6 +15,8 @@ type Store = {
   offline: boolean
   avatarUrl: (m: Member | null | undefined) => string | null
   live: LiveData
+  /** true אחרי שהנתונים החיים נטענו מהשרת לפחות פעם אחת */
+  liveReady: boolean
   refreshLive: () => Promise<void>
   /** כתובת חתומה לקובץ בדלי photos (null עד שנחתם) */
   photoUrl: (path: string) => string | null
@@ -49,6 +51,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const avatarsRef = useRef(avatars)
   avatarsRef.current = avatars
 
+  const [liveReady, setLiveReady] = useState(false)
   const [live, setLive] = useState<LiveData>({ messages: [], reads: [], photos: [], locations: [], meetings: [], likes: [], comments: [] })
 
   // מטמון כתובות חתומות לשני הדליים (בתוקף 7 ימים, מתחדש יום לפני)
@@ -82,6 +85,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     try {
       const l = await a.fetchLive()
       setLive(l)
+      setLiveReady(true)
       void signPaths(a, 'photos', l.photos.slice(0, 60).map((p) => p.thumb_path))
     } catch (e) { console.warn('live', e) }
   }, [signPaths])
@@ -187,8 +191,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const refreshLive = useCallback(async () => { if (api) await loadLive(api) }, [api, loadLive])
 
   const value = useMemo<Store>(() => ({
-    phase, api, data, me, meId, loadError, offline, avatarUrl, refresh, enter, leave, live, refreshLive, photoUrl, signPhotos,
-  }), [phase, api, data, me, meId, loadError, offline, avatarUrl, refresh, enter, leave, live, refreshLive, photoUrl, signPhotos])
+    phase, api, data, me, meId, loadError, offline, avatarUrl, refresh, enter, leave, live, liveReady, refreshLive, photoUrl, signPhotos,
+  }), [phase, api, data, me, meId, loadError, offline, avatarUrl, refresh, enter, leave, live, liveReady, refreshLive, photoUrl, signPhotos])
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }
