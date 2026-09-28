@@ -48,15 +48,39 @@ Deno.serve(async (req) => {
     to = people.filter((x) => x.id !== mt.created_by && (mt.audience === 'all' || x.household_id === (mt.household_id ?? creator?.household_id))).map((x) => x.id)
     const at = new Date(mt.meet_at).toLocaleTimeString('he-IL', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' })
     payload = { title: `נקודת מפגש · ${name(mt.created_by)}`, body: `${mt.title} ב-${at}`, tag: `meet-${mt.id}`, important: true, url: APP_URL }
+  } else if (kind === 'photos') {
+    // תמונות שעלו ולא דווחו; מחכים דקה וחצי שהעלאה של כמה תמונות תסתיים
+    const cutoff = new Date(Date.now() - 90_000).toISOString()
+    const { data: fresh = [] } = await sb.from('photos').select('id,member_id').eq('notified', false).lt('created_at', cutoff)
+    const rows = fresh as { id: string; member_id: string }[]
+    if (!rows.length) return new Response('no new photos')
+    await sb.from('photos').update({ notified: true }).in('id', rows.map((r) => r.id))
+    const byMember = new Map<string, number>()
+    for (const r of rows) byMember.set(r.member_id, (byMember.get(r.member_id) ?? 0) + 1)
+    let total = 0
+    for (const [uploader, n] of byMember) {
+      const recipients = people.filter((x) => x.id !== uploader).map((x) => x.id)
+      total += await sendTo(recipients, {
+        title: 'תמונות חדשות באלבום',
+        body: n === 1 ? `תמונה חדשה מ${name(uploader)}` : `${n} תמונות חדשות מ${name(uploader)}`,
+        tag: `photos-${uploader}`, important: false, url: APP_URL,
+      })
+    }
+    return new Response(JSON.stringify({ groups: byMember.size, sent: total }))
   } else return new Response('unknown kind', { status: 400 })
 
   if (!to.length) return new Response('nobody')
-  const { data: subs = [] } = await sb.from('push_subscriptions').select('*').in('member_id', to)
+  const sent = await sendTo(to, payload)
+  return new Response(JSON.stringify({ to: to.length, sent }), { headers: { 'Content-Type': 'application/json' } })
+
+  async function sendTo(ids: string[], pl: Record<string, unknown>) {
+  if (!ids.length) return 0
+  const { data: subs = [] } = await sb.from('push_subscriptions').select('*').in('member_id', ids)
   let sent = 0
   await Promise.all((subs as { endpoint: string; p256dh: string; auth: string }[]).map(async (s) => {
     try {
-      await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify(payload), {
-        TTL: 6 * 3600, urgency: payload.important ? 'high' : 'normal',
+      await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify(pl), {
+        TTL: 6 * 3600, urgency: pl.important ? 'high' : 'normal',
       })
       sent++
     } catch (e) {
@@ -64,5 +88,6 @@ Deno.serve(async (req) => {
       if (code === 404 || code === 410) await sb.from('push_subscriptions').delete().eq('endpoint', s.endpoint)
     }
   }))
-  return new Response(JSON.stringify({ to: to.length, subs: subs.length, sent }), { headers: { 'Content-Type': 'application/json' } })
+  return sent
+  }
 })

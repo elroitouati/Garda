@@ -35,6 +35,10 @@ export interface Api {
   cancelMeeting(id: string): Promise<void>
   savePush(memberId: string, sub: PushSubscriptionJSON): Promise<void>
   setMyEmergencyPhone(phone: string): Promise<RpcResult>
+  // אלבום
+  setLike(photoId: string, memberId: string, on: boolean): Promise<void>
+  addComment(photoId: string, memberId: string, body: string): Promise<void>
+  deleteComment(id: string): Promise<void>
 }
 
 function must<T>(r: { data: T | null; error: unknown }): T {
@@ -127,14 +131,16 @@ const realApi = (): Api => {
     },
     async fetchLive() {
       const since = new Date(Date.now() - 4 * 86400000).toISOString()
-      const [messages, reads, photos, locations, meetings] = await Promise.all([
+      const [messages, reads, photos, locations, meetings, likes, comments] = await Promise.all([
         sb.from('messages').select('*').gte('created_at', since).order('created_at', { ascending: false }),
         sb.from('message_reads').select('*').gte('read_at', since),
         sb.from('photos').select('*').order('taken_at', { ascending: false }),
         sb.from('locations').select('*'),
         sb.from('meetings').select('*').eq('active', true).gte('meet_at', new Date(Date.now() - 3 * 3600_000).toISOString()).order('created_at', { ascending: false }),
+        sb.from('photo_likes').select('*'),
+        sb.from('photo_comments').select('*').order('created_at'),
       ])
-      return { messages: must(messages), reads: must(reads), photos: must(photos), locations: locations.data ?? [], meetings: meetings.data ?? [] }
+      return { messages: must(messages), reads: must(reads), photos: must(photos), locations: locations.data ?? [], meetings: meetings.data ?? [], likes: likes.data ?? [], comments: comments.data ?? [] }
     },
     async sendMessage(m) {
       must(await sb.from('messages').insert(m))
@@ -173,6 +179,16 @@ const realApi = (): Api => {
     async savePush(memberId, sub) {
       must(await sb.from('push_subscriptions').upsert({ endpoint: sub.endpoint, member_id: memberId, p256dh: sub.keys?.p256dh, auth: sub.keys?.auth }))
     },
+    async setLike(photoId, memberId, on) {
+      if (on) must(await sb.from('photo_likes').upsert({ photo_id: photoId, member_id: memberId }))
+      else must(await sb.from('photo_likes').delete().eq('photo_id', photoId).eq('member_id', memberId))
+    },
+    async addComment(photoId, memberId, body) {
+      must(await sb.from('photo_comments').insert({ photo_id: photoId, member_id: memberId, body }))
+    },
+    async deleteComment(id) {
+      must(await sb.from('photo_comments').delete().eq('id', id))
+    },
     async setMyEmergencyPhone(phone) {
       const r = await sb.rpc('set_my_emergency_phone', { phone })
       if (r.error) return { error: 'network' }
@@ -180,7 +196,7 @@ const realApi = (): Api => {
     },
     subscribeLive(onChange) {
       const ch = sb.channel('live-changes')
-      for (const table of ['messages', 'message_reads', 'photos', 'locations', 'meetings'])
+      for (const table of ['messages', 'message_reads', 'photos', 'locations', 'meetings', 'photo_likes', 'photo_comments'])
         ch.on('postgres_changes', { event: '*', schema: 'public', table }, onChange)
       ch.subscribe()
       return () => { sb.removeChannel(ch) }

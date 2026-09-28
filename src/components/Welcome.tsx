@@ -4,6 +4,7 @@ import { useStore } from '../lib/store'
 import { romeDate, shortDate, weekdayLetter } from '../lib/time'
 import type { Member } from '../lib/types'
 import { AvatarSetup } from '../screens/AvatarSetup'
+import { photoDay, topPhoto, useLikeCounts } from './Album'
 import { Avatar } from './Avatar'
 
 // ── פוסטר אגם גארדה: שכבות שטוחות בסגנון פוסטר טיולים איטלקי ──
@@ -70,7 +71,8 @@ export function Welcome({ full, onDone, onLeave, onLocation }: {
   onLeave: () => void
   onLocation: (share: boolean) => void
 }) {
-  const { data, me } = useStore()
+  const { data, me, live, photoUrl } = useStore()
+  const likeCounts = useLikeCounts()
   const [step, setStep] = useState<Step>('hero')
   const [leaving, setLeaving] = useState(false)
   const [camera, setCamera] = useState(false)
@@ -124,6 +126,23 @@ export function Welcome({ full, onDone, onLeave, onLocation }: {
             <p className="text-[15px] font-semibold text-terra"><bdi lang="it">{ITALIAN(hour)}</bdi> · {HEBREW(hour)}</p>
             <h1 className="mt-1 text-[clamp(28px,8.5vw,38px)] leading-[1.15]">{me.name},<br />ברוכים הבאים לגארדה</h1>
             <DayLine idx={idx} total={days.length} title={idx >= 0 ? days[idx].title : ''} date={idx >= 0 ? today : ''} daysToGo={daysToGo} />
+            {(() => {
+              // הרגע של אתמול: התמונה הכי אהובה
+              const y = romeDate(new Date(now.getTime() - 86400000))
+              const top = topPhoto(live.photos.filter((p) => photoDay(p) === y), likeCounts)
+              const u = top && photoUrl(top.photo.thumb_path)
+              if (!top || !u) return null
+              const by = data?.members.find((m) => m.id === top.photo.member_id)
+              return (
+                <div className="mt-3 flex items-center gap-3 rounded-2xl bg-surface p-2.5 shadow-card">
+                  <img src={u} alt="" className="h-16 w-16 shrink-0 rounded-xl object-cover" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[14px] font-semibold text-terra">הרגע של אתמול</div>
+                    <div className="truncate text-[15px] text-muted">צילום: {by?.name} · <bdi className="tnum">{top.likes}</bdi> לבבות</div>
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         )}
 

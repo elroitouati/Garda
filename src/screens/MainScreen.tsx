@@ -1,8 +1,10 @@
-import { Camera, Check, ImagePlus, Images, LocateFixed, MapPin, MessageCircle, Minus, Navigation, Plus, Shield, Umbrella, WifiOff, X } from 'lucide-react'
+import { Camera, Check, ImagePlus, LocateFixed, MapPin, MessageCircle, Minus, Navigation, Plus, Shield, Umbrella, WifiOff, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Avatar } from '../components/Avatar'
 import { BottomSheet, type Snap } from '../components/BottomSheet'
+import { AlbumTab } from '../components/Album'
 import { Gallery } from '../components/Gallery'
+import { Slideshow } from '../components/Slideshow'
 import { Welcome } from '../components/Welcome'
 import { EmergencyPhonePrompt, FridayCard, LocationConsent, LocationHelp, MeetingCard, MeetingComposer, MeetingPopup, PushCard, ShabbatScreen, TipCard, useWalkingRoute } from '../components/Live'
 import { ComposeSheet, MessageHistory, MessagePopups } from '../components/Messages'
@@ -20,6 +22,7 @@ import { shabbatPhase } from '../lib/shabbat'
 import { TIPS } from '../lib/tips'
 import { googleLink, wazeLink } from '../lib/nav'
 import { preparePhoto } from '../lib/photos'
+import { enqueue, flush, pendingCount } from '../lib/uploadQueue'
 import { myActivities, useNow } from '../lib/schedule'
 import { useStore } from '../lib/store'
 import { isFakeNow, now, romeDate, shortDate, weekdayLetter } from '../lib/time'
@@ -53,6 +56,23 @@ export function MainScreen() {
   // ממשק המפה מתגלה רק אחרי מסך הפתיחה
   const [revealed, setRevealed] = useState(() => welcome === null)
   const [fabOpen, setFabOpen] = useState(false)
+  const [slideshow, setSlideshow] = useState<string[] | null>(null)
+  const [pending, setPending] = useState(0)
+  // תמונות שממתינות לקליטה: מנסים שוב כשחוזרת רשת, בפתיחה, וכל חצי דקה
+  useEffect(() => {
+    if (!api) return
+    const run = async () => {
+      const n = await flush(api)
+      if (n) { await refreshLive(); toast(n === 1 ? 'תמונה שחיכתה לקליטה עלתה' : `${n} תמונות שחיכו לקליטה עלו`) }
+      setPending(await pendingCount())
+    }
+    void run()
+    window.addEventListener('online', run)
+    const iv = setInterval(run, 30000)
+    return () => { window.removeEventListener('online', run); clearInterval(iv) }
+  }, [api]) // eslint-disable-line react-hooks/exhaustive-deps
+  // תמונות חדשות מאחרים מאז הביקור האחרון באלבום
+  const [albumSeen, setAlbumSeen] = useState(() => { try { return localStorage.getItem('garda-album-seen') ?? '' } catch { return '' } })
   const [phoneLater, setPhoneLater] = useState(() => { try { return localStorage.getItem('garda-phone-later') === romeDate(new Date()) } catch { return false } })
   // הודעות, טיפים ובקשות קופצות רק אחרי שהמעבר למפה נגמר, כדי לא לשבור אותו
   const [settled, setSettled] = useState(revealed)
@@ -97,23 +117,30 @@ export function MainScreen() {
     if (!files?.length || !api || !me || !data) return
     setCameraMenu(false)
     const arr = [...files]
-    let done = 0, failed = 0, bySchedule = 0
+    let done = 0, failed = 0, queued = 0, bySchedule = 0
     setUploads({ done, total: arr.length, failed })
     const hotel = data.places.find((p) => p.kind === 'hotel')
     for (const f of arr) {
+      let prep: Awaited<ReturnType<typeof preparePhoto>> | null = null
       try {
-        const prep = await preparePhoto(f, source, list, hotel)
+        prep = await preparePhoto(f, source, list, hotel)
         await api.uploadPhoto(me.id, prep.full, prep.thumb, prep.meta)
         if (prep.meta.loc_source === 'schedule') bySchedule++
         done++
-      } catch (e) { console.error(e); failed++ }
-      setUploads({ done, total: arr.length, failed })
+      } catch (e) {
+        console.error(e)
+        // אין קליטה: שומרים בטלפון ומעלים לבד כשהקליטה חוזרת
+        if (prep) { try { await enqueue(me.id, prep); queued++ } catch { failed++ } } else failed++
+      }
+      setUploads({ done: done + queued, total: arr.length, failed })
     }
     await refreshLive()
+    setPending(await pendingCount())
     setTimeout(() => setUploads(null), 1500)
-    if (failed) toast(navigator.onLine ? `${failed} תמונות לא עלו. נסה שוב.` : 'אין קליטה. התמונות לא עלו.')
+    if (queued) toast(queued === 1 ? 'אין קליטה. התמונה תעלה לבד כשהקליטה תחזור' : `אין קליטה. ${queued} התמונות יעלו לבד כשהקליטה תחזור`)
+    else if (failed) toast(`${failed} תמונות לא עלו. נסה שוב.`)
     else toast(done === 1 ? 'התמונה עלתה לאלבום' : `${done} תמונות עלו לאלבום`)
-    if (bySchedule && !failed) setTimeout(() => toast('מיקום לפי הלו"ז. אפשר לתקן בגלריה'), 2400)
+    if (bySchedule && !failed && !queued) setTimeout(() => toast('מיקום לפי הלו"ז. אפשר לתקן בגלריה'), 2400)
   }
 
   const list = useMemo(() => (data ? myActivities(data, me) : []), [data, me])
@@ -298,7 +325,8 @@ export function MainScreen() {
 
   const hidden = !revealed
   const unread = me ? live.messages.filter((m) => romeDate(new Date(m.created_at)) === today && isForMe(m, me, data.members) && !readOf(m, me.id, live.reads)).length : 0
-  const TABS: ['day' | 'family' | 'album' | 'info', string, number][] = [['day', 'היום', 0], ['family', 'משפחה', unread], ['album', 'אלבום', 0], ['info', 'מידע', 0]]
+  const newPhotos = me ? live.photos.filter((p) => p.member_id !== me.id && p.created_at > albumSeen).length : 0
+  const TABS: ['day' | 'family' | 'album' | 'info', string, number][] = [['day', 'היום', 0], ['family', 'משפחה', unread], ['album', 'אלבום', newPhotos], ['info', 'מידע', 0]]
   const fabActions: { key: string; label: string; icon: React.ReactNode; tone: string; run: () => void }[] = [
     { key: 'photo', label: 'תמונה לאלבום', icon: <Camera size={20} />, tone: 'bg-green text-white', run: () => setCameraMenu(true) },
     { key: 'msg', label: 'הודעה למשפחה', icon: <MessageCircle size={20} />, tone: 'bg-surface text-ink', run: () => setCompose(true) },
@@ -330,7 +358,7 @@ export function MainScreen() {
       {(offline || loadError) && !hidden && (
         <div className="absolute inset-x-0 z-20 flex justify-center" style={{ top: 'calc(var(--safe-top) + 64px)' }}>
           <span className="flex items-center gap-1.5 rounded-full bg-ink/85 px-3 py-1 text-[13px] font-semibold text-bg">
-            <WifiOff size={14} /> {offline ? 'אין קליטה · מציג נתונים שמורים' : 'לא הצלחתי לרענן'}
+            <WifiOff size={14} /> {offline ? (pending ? `אין קליטה · ${pending === 1 ? 'תמונה אחת ממתינה' : `${pending} תמונות ממתינות`}` : 'אין קליטה · מציג נתונים שמורים') : 'לא הצלחתי לרענן'}
           </span>
         </div>
       )}
@@ -390,6 +418,11 @@ export function MainScreen() {
         </div>
       )}
 
+      {pending > 0 && !uploads && revealed && !offline && !loadError && (
+        <div className="absolute inset-x-0 z-20 flex justify-center" style={{ top: 'calc(var(--safe-top) + 64px)' }}>
+          <span className="tnum rounded-full bg-ink/85 px-3 py-1 text-[13px] font-semibold text-bg">{pending === 1 ? 'תמונה אחת ממתינה להעלאה' : `${pending} תמונות ממתינות להעלאה`}</span>
+        </div>
+      )}
       {uploads && (
         <div className="absolute inset-x-0 z-30 flex justify-center" style={{ top: 'calc(var(--safe-top) + 64px)' }}>
           <span className="tnum flex items-center gap-2 rounded-full bg-ink/90 px-4 py-2 text-[14px] font-semibold text-bg">
@@ -455,7 +488,10 @@ export function MainScreen() {
         <div className="sticky top-0 z-10 mt-4 bg-surface px-4 pb-2 pt-1">
           <div className="grid grid-cols-4 gap-1 rounded-2xl bg-surface2 p-1" role="tablist" aria-label="תוכן">
             {TABS.map(([k, label, badge]) => (
-              <button key={k} role="tab" aria-selected={tab === k} onClick={() => { setTab(k); if (snap === 0) setSnap(1) }}
+              <button key={k} role="tab" aria-selected={tab === k} onClick={() => {
+                setTab(k); if (snap === 0) setSnap(1)
+                if (k === 'album') { const t0 = new Date().toISOString(); setAlbumSeen(t0); try { localStorage.setItem('garda-album-seen', t0) } catch { /* ignore */ } }
+              }}
                 className={`relative min-h-[40px] rounded-xl text-[15px] font-semibold transition ${tab === k ? 'bg-surface text-ink shadow-card' : 'text-muted'}`}>
                 {label}
                 {badge > 0 && <span className="tnum absolute -top-1 end-1 grid h-5 min-w-5 place-items-center rounded-full bg-terra px-1 text-[11px] font-bold text-white">{badge}</span>}
@@ -509,32 +545,7 @@ export function MainScreen() {
           )}
 
           {tab === 'album' && (
-            photos.length ? (
-              <>
-                <div className="grid grid-cols-3 gap-1.5 px-4 pt-2">
-                  {photos.slice(0, 60).map((ph, k) => {
-                    const u = photoUrl(ph.thumb_path)
-                    const who = data.members.find((m) => m.id === ph.member_id)
-                    return (
-                      <button key={ph.id} className="relative aspect-square overflow-hidden rounded-xl bg-surface2" onClick={() => setGallery({ ids: null, start: k })} aria-label={`תמונה של ${who?.name ?? ''}`}>
-                        {u && <img src={u} alt="" className="h-full w-full object-cover" loading="lazy" />}
-                        {who && <span className="absolute bottom-1 end-1"><Avatar member={who} size={20} /></span>}
-                      </button>
-                    )
-                  })}
-                </div>
-                <div className="flex gap-2 px-4 pt-3">
-                  <button className="btn-primary flex-1" onClick={() => setCameraMenu(true)}><Camera size={18} /> הוסף תמונה</button>
-                  <button className="btn-ghost flex-1" onClick={() => setGallery({ ids: null, start: 0 })}><Images size={18} /> כל {photos.length}</button>
-                </div>
-              </>
-            ) : (
-              <div className="mx-4 mt-2 flex flex-col items-center gap-3 rounded-3xl bg-surface2 p-6 text-center">
-                <Images size={28} className="text-muted" />
-                <p className="text-muted">עוד אין תמונות. כל תמונה שתעלו תופיע כאן ועל המפה, במקום שבו צולמה.</p>
-                <button className="btn-primary" onClick={() => setCameraMenu(true)}><Camera size={18} /> תמונה ראשונה</button>
-              </div>
-            )
+            <AlbumTab onOpen={(ids, st) => setGallery({ ids, start: st })} onSlideshow={(ids) => setSlideshow(ids)} onAdd={() => setCameraMenu(true)} />
           )}
 
           {tab === 'info' && (
@@ -587,6 +598,7 @@ export function MainScreen() {
         <Gallery photos={galleryPhotos} start={gallery.start} onClose={() => setGallery(null)}
           onPlace={(p) => { setGallery(null); setSelectedPlace(null); setSnap(0); setPlacing(p); mapRef.current?.flyTo(p, 15) }} />
       )}
+      {slideshow && <Slideshow photos={photos.filter((p) => slideshow.includes(p.id))} onClose={() => setSlideshow(null)} />}
       {overlay === 'settings' && <Settings onClose={() => setOverlay(null)} />}
       {overlay === 'emergency' && <EmergencyCard onClose={() => setOverlay(null)} />}
       {avatarPrompt && me && settled && (

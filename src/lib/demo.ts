@@ -80,7 +80,7 @@ export function demoApi(): Api {
   const fake = (member_id: string, lat: number, lng: number, minAgo: number, sharing = true): Location =>
     ({ member_id, lat, lng, accuracy: 15, heading: null, sharing, updated_at: new Date(Date.now() - minAgo * 60000).toISOString() })
   const live: LiveData = {
-    messages: [], reads: [], photos: [], meetings: [],
+    messages: [], reads: [], photos: [], meetings: [], likes: [], comments: [],
     locations: [
       fake('yatir', 45.5212, 10.5391, 1), fake('sharon', 45.5214, 10.5385, 2), fake('shiilo', 45.5209, 10.5388, 0),
       fake('etel', 45.5245, 10.5293, 4), fake('gil', 45.5362, 10.5357, 25), fake('eva', 45.5263, 10.5331, 1),
@@ -156,6 +156,7 @@ export function demoApi(): Api {
       emitLive()
     },
     async uploadPhoto(memberId, full, thumb, meta) {
+      if (!navigator.onLine) throw new Error('offline')
       const pid = id()
       const path = `${memberId}/${pid}.jpg`, thumb_path = `${memberId}/${pid}_t.jpg`
       avatars[path] = URL.createObjectURL(full)
@@ -181,6 +182,16 @@ export function demoApi(): Api {
     },
     async cancelMeeting(mid) { live.meetings = live.meetings.filter((x) => x.id !== mid); emitLive() },
     async savePush() { /* אין שרת במצב הדגמה */ },
+    async setLike(photoId, memberId, on) {
+      live.likes = live.likes.filter((l) => !(l.photo_id === photoId && l.member_id === memberId))
+      if (on) live.likes.push({ photo_id: photoId, member_id: memberId, created_at: new Date().toISOString() })
+      emitLive()
+    },
+    async addComment(photoId, memberId, body) {
+      live.comments.push({ id: id(), photo_id: photoId, member_id: memberId, body, created_at: new Date().toISOString() })
+      emitLive()
+    },
+    async deleteComment(cid) { live.comments = live.comments.filter((c) => c.id !== cid); emitLive() },
     async setMyEmergencyPhone(phone) {
       const me = localStorage.getItem('garda-demo-me')
       const c = db.emergency.find((x) => x.member_id === me)

@@ -119,7 +119,13 @@ export type Photo = {
   created_at: string
 }
 
-export type LiveData = { messages: Message[]; reads: MessageRead[]; photos: Photo[]; locations: Location[]; meetings: Meeting[] }
+export type PhotoLike = { photo_id: string; member_id: string; created_at: string }
+export type PhotoComment = { id: string; photo_id: string; member_id: string; body: string; created_at: string }
+
+export type LiveData = {
+  messages: Message[]; reads: MessageRead[]; photos: Photo[]; locations: Location[]; meetings: Meeting[]
+  likes: PhotoLike[]; comments: PhotoComment[]
+}
 
 export type Location = {
   member_id: string
