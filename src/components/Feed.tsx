@@ -30,6 +30,11 @@ export function Feed({ startId, onClose, onComments }: {
   const boxRef = useRef<HTMLDivElement>(null)
   const videos = useRef(new Map<string, HTMLVideoElement>())
   const tap = useRef<{ id: string; timer: number } | null>(null)
+  // החלקה שמאלה סוגרת וחוזרת למסך הקודם; המסך זז עם האצבע
+  const [dx, setDx] = useState(0)
+  const [closing, setClosing] = useState(false)
+  const sw = useRef<{ id: number; x0: number; y0: number; on: boolean } | null>(null)
+  const close = () => { setClosing(true); setTimeout(onClose, 220) }
 
   const likes = useMemo(() => {
     const m = new Map<string, string[]>()
@@ -101,7 +106,27 @@ export function Feed({ startId, onClose, onComments }: {
   const cur = items[active]
 
   return (
-    <div className="feed-in fixed inset-0 z-[69] bg-black text-white" role="dialog" aria-modal="true" aria-label="פיד תמונות וסרטונים">
+    <div className="feed-in fixed inset-0 z-[69] bg-black text-white" role="dialog" aria-modal="true" aria-label="פיד תמונות וסרטונים"
+      style={{ transform: closing ? 'translateX(-100%)' : dx ? `translateX(${dx}px)` : undefined, transition: closing ? 'transform .22s ease-in' : dx ? 'none' : 'transform .25s' }}
+      onPointerDown={(e) => { sw.current = { id: e.pointerId, x0: e.clientX, y0: e.clientY, on: false } }}
+      onPointerMove={(e) => {
+        const s = sw.current
+        if (!s || s.id !== e.pointerId) return
+        const ddx = e.clientX - s.x0, ddy = e.clientY - s.y0
+        if (!s.on) {
+          if (Math.abs(ddy) > 12 && Math.abs(ddy) > Math.abs(ddx)) { sw.current = null; return } // גלילה רגילה
+          if (ddx < -12 && Math.abs(ddx) > Math.abs(ddy) * 1.4) s.on = true
+          else return
+        }
+        setDx(Math.min(0, ddx))
+      }}
+      onPointerUp={(e) => {
+        const s = sw.current
+        sw.current = null
+        if (!s || s.id !== e.pointerId || !s.on) return
+        if (e.clientX - s.x0 < -80) close(); else setDx(0)
+      }}
+      onPointerCancel={() => { sw.current = null; setDx(0) }}>
       <div ref={boxRef} className="no-scrollbar h-full snap-y snap-mandatory overflow-y-scroll overscroll-contain">
         {items.map((p, i) => {
           const near = Math.abs(i - active) <= 1
@@ -160,7 +185,7 @@ export function Feed({ startId, onClose, onComments }: {
       </div>
 
       <header className="pointer-events-none absolute inset-x-0 top-0 flex items-center gap-2 bg-gradient-to-b from-black/60 to-transparent px-3 pb-6 pt-[calc(var(--safe-top)+8px)]">
-        <button className="pointer-events-auto grid h-11 w-11 place-items-center rounded-full bg-black/35 backdrop-blur-sm" onClick={onClose} aria-label="סגור"><X size={22} /></button>
+        <button className="pointer-events-auto grid h-11 w-11 place-items-center rounded-full bg-black/35 backdrop-blur-sm" onClick={close} aria-label="סגור"><X size={22} /></button>
         <div className="flex flex-1 justify-center">
           <div className="pointer-events-auto flex rounded-full bg-black/40 p-1 backdrop-blur-sm" role="radiogroup" aria-label="מה להציג">
             {([[false, 'הכל'], [true, 'סרטונים']] as const).map(([v, label]) => (
@@ -184,7 +209,7 @@ export function Feed({ startId, onClose, onComments }: {
       )}
       {active === 0 && items.length > 1 && (
         <div className="pointer-events-none absolute inset-x-0 top-[calc(var(--safe-top)+64px)] flex justify-center">
-          <span className="animate-rise rounded-full bg-black/45 px-3 py-1 text-[13px] font-semibold backdrop-blur-sm">גוללים למעלה לעוד · לחיצה כפולה = לב</span>
+          <span className="animate-rise rounded-full bg-black/45 px-3 py-1 text-[13px] font-semibold backdrop-blur-sm">גוללים למעלה לעוד · לחיצה כפולה = לב · החלקה שמאלה = חזרה</span>
         </div>
       )}
     </div>
