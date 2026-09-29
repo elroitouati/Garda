@@ -15,6 +15,8 @@ export type MapHandle = {
   center: () => { lat: number; lng: number } | null
   /** הנקודה במרכז האזור הגלוי מעל החלונית (שם עומדת הסיכה) */
   visibleCenter: () => { lat: number; lng: number } | null
+  /** מתי המשתמש הזיז את המפה בפעם האחרונה (לא תנועה של הקוד) */
+  lastUserMove: () => number
 }
 
 type Props = {
@@ -122,7 +124,9 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ places, h
 
   const padding = () => ({ top: 120, bottom: padRef.current + 24, left: 80, right: 56 })
 
+  const userMove = useRef(0)
   useImperativeHandle(ref, () => ({
+    lastUserMove: () => userMove.current,
     fit(pts, opts) {
       const m = map.current
       if (!m || !pts.length) return
@@ -320,6 +324,7 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ places, h
     m.on('zoom', () => setZoom(m.getZoom()))
     m.on('moveend', () => { drawPhotos.current(); drawPeople.current() })
     m.on('load', () => { drawPhotos.current(); drawPeople.current(); drawMeeting.current() })
+    m.on('movestart', (e) => { if ((e as { originalEvent?: Event }).originalEvent) userMove.current = Date.now() })
     // לחיצה ארוכה על המפה → נקודת מפגש
     let lp: ReturnType<typeof setTimeout> | undefined
     const cancelLp = () => clearTimeout(lp)

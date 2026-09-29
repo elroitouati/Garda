@@ -22,6 +22,8 @@ export default defineConfig({
         scope: base,
         display: 'standalone',
         orientation: 'portrait',
+        // אנדרואיד: "שיתוף" מגוגל מפות ישר לאפליקציה קובע נקודת מפגש
+        share_target: { action: base, method: 'GET', params: { title: 'title', text: 'text', url: 'url' } },
         background_color: '#FAF5EA',
         theme_color: '#1768B0',
         icons: [

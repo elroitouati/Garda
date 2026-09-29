@@ -24,6 +24,7 @@ import { TIPS } from '../lib/tips'
 import { googleLink, wazeLink } from '../lib/nav'
 import { preparePhoto, prepareVideo } from '../lib/photos'
 import { isVideoFile, unlockMedia, VideoError } from '../lib/video'
+import { looksLikeMaps, takeShare } from '../lib/mapsLink'
 import { enqueue, flush, pendingCount } from '../lib/uploadQueue'
 import { myActivities, useNow } from '../lib/schedule'
 import { useStore } from '../lib/store'
@@ -92,6 +93,9 @@ export function MainScreen() {
   const [uploads, setUploads] = useState<{ done: number; total: number; failed: number; note?: string } | null>(null)
   const [filter, setFilter] = useState<'all' | 'mine'>('all')
   const [meetDraft, setMeetDraft] = useState(false)
+  const [sharedPlace, setSharedPlace] = useState<string | null>(null)
+  // המקום המדויק מגוגל מפות; נשמר כל עוד לא הזיזו את המפה ביד
+  const meetTarget = useRef<{ lat: number; lng: number; at: number } | null>(null)
   const [locHelpHidden, setLocHelpHidden] = useState(false)
   const [tip, setTip] = useState<{ title: string; body: string } | null>(null)
   const [seenMeetings, setSeenMeetings] = useState<Set<string>>(() => { try { return new Set(JSON.parse(localStorage.getItem('garda-meet-seen') || '[]')) } catch { return new Set() } })
@@ -282,9 +286,18 @@ export function MainScreen() {
     return n
   })
   const startMeeting = (at?: { lat: number; lng: number }) => {
-    setSelectedPlace(null); setSnap(0); setMeetDraft(true)
+    setSelectedPlace(null); setSnap(0); setMeetDraft(true); meetTarget.current = null
     if (at) mapRef.current?.flyTo(at, 16)
   }
+
+  // מקום ששותף מגוגל מפות לאפליקציה (אנדרואיד) פותח נקודת מפגש
+  useEffect(() => {
+    if (!data || !me || welcome || !settled) return // אחרי אנימציית הפתיחה, שלא תזיז את המפה בחזרה
+    const t = takeShare()
+    if (!t) return
+    if (looksLikeMaps(t)) { setSharedPlace(t); startMeeting() }
+    else toast('אפשר לשתף לכאן מקום מגוגל מפות, כדי לקבוע נקודת מפגש')
+  }, [!!data, !!me, !!welcome, settled]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── טיפים לפי מיקום: פעם ביום לכל מקום ──
   useEffect(() => {
@@ -406,12 +419,14 @@ export function MainScreen() {
           <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center" style={{ paddingBottom: 'var(--sheet-h)' }}>
             <div className="meet-pin" style={{ transform: 'translateY(-22px)' }}><span className="mp-head" /></div>
           </div>
-          <MeetingComposer onCancel={() => setMeetDraft(false)} onSave={async (title, at) => {
-            const c = mapRef.current?.visibleCenter()
+          <MeetingComposer sharedText={sharedPlace} onPlace={(p) => { meetTarget.current = { lat: p.lat, lng: p.lng, at: Date.now() }; mapRef.current?.flyTo(p, 17) }}
+            onCancel={() => { setMeetDraft(false); setSharedPlace(null); meetTarget.current = null }} onSave={async (title, at) => {
+            const tg = meetTarget.current
+            const c = tg && (mapRef.current?.lastUserMove() ?? 0) < tg.at ? tg : mapRef.current?.visibleCenter()
             if (!c || !api || !me) return
             try {
               await api.createMeeting({ created_by: me.id, title, lat: c.lat, lng: c.lng, meet_at: at.toISOString(), audience: 'all', household_id: null })
-              await refreshLive(); setMeetDraft(false); setSnap(1); toast('נקודת המפגש נשלחה לכולם')
+              await refreshLive(); setMeetDraft(false); setSharedPlace(null); meetTarget.current = null; setSnap(1); toast('נקודת המפגש נשלחה לכולם')
             } catch { toast('לא הצלחתי לשלוח. בדוק קליטה.') }
           }} />
         </>

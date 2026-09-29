@@ -1,7 +1,8 @@
-import { BellRing, Clock, Flame, Footprints, MapPin, Navigation, Shield, Smartphone, X } from 'lucide-react'
+import { BellRing, ClipboardPaste, Clock, Flame, Footprints, Map as MapIcon, MapPin, Navigation, Shield, Smartphone, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { formatDistance, type LatLng } from '../lib/geo'
 import { isIOS, type GeoState } from '../lib/location'
+import { looksLikeMaps, resolvePlace, type SharedPlace } from '../lib/mapsLink'
 import { enablePush, pushStatus, type PushStatus } from '../lib/push'
 import { myActivities, useNow } from '../lib/schedule'
 import { romeHM } from '../lib/shabbat'
@@ -52,8 +53,34 @@ export function LocationHelp({ state, onClose }: { state: GeoState; onClose: () 
 const QUICK_PLACES = ['נפגשים כאן', 'ליד הרכב', 'בכניסה', 'בנמל', 'במלון']
 const QUICK_MIN = [15, 30, 45, 60]
 
-export function MeetingComposer({ onSave, onCancel }: { onSave: (title: string, at: Date) => Promise<void>; onCancel: () => void }) {
+export function MeetingComposer({ onSave, onCancel, onPlace, sharedText }: {
+  onSave: (title: string, at: Date) => Promise<void>; onCancel: () => void
+  onPlace: (p: SharedPlace) => void; sharedText?: string | null
+}) {
   const [title, setTitle] = useState('נפגשים כאן')
+  // מקום מגוגל מפות: מדביקים קישור (או משתפים מהאפליקציה) והמפה עוברת לשם
+  const [pasteOpen, setPasteOpen] = useState(false)
+  const [link, setLink] = useState('')
+  const [finding, setFinding] = useState(false)
+  const [findErr, setFindErr] = useState('')
+  const fromText = async (text: string) => {
+    setFinding(true); setFindErr('')
+    const p = await resolvePlace(text)
+    if (!p) { setFinding(false); setFindErr('לא זיהיתי מקום. בגוגל מפות: בוחרים מקום ← שיתוף ← העתקת קישור.'); setPasteOpen(true); return }
+    onPlace(p)
+    if (p.name) setTitle(p.name.slice(0, 80))
+    setPasteOpen(false); setLink('')
+    await new Promise((r) => setTimeout(r, 1300)) // מחכים שהמפה תגיע למקום
+    setFinding(false)
+  }
+  const paste = async () => {
+    try {
+      const t = await navigator.clipboard.readText()
+      if (t && looksLikeMaps(t)) { await fromText(t); return }
+    } catch { /* אין הרשאה ללוח: מדביקים ידנית */ }
+    setPasteOpen(true)
+  }
+  useEffect(() => { if (sharedText) void fromText(sharedText) }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const [mins, setMins] = useState<number | null>(30)
   const [time, setTime] = useState('')
   const [busy, setBusy] = useState(false)
@@ -68,7 +95,20 @@ export function MeetingComposer({ onSave, onCancel }: { onSave: (title: string, 
   }
   return (
     <div className="absolute inset-x-3 z-30 rounded-3xl bg-surface p-4 shadow-float" style={{ top: 'calc(var(--safe-top) + 10px)' }}>
-      <p className="mb-2 text-center font-semibold">הזז את המפה עד שהסיכה במקום</p>
+      <p className="mb-2 text-center font-semibold">{finding ? 'מחפש את המקום…' : 'הזז את המפה עד שהסיכה במקום, או בחר בגוגל מפות'}</p>
+      <div className="mb-2 grid grid-cols-2 gap-2">
+        <a className="btn-ghost min-h-[42px] text-[15px]" href="https://www.google.com/maps/@45.55,10.65,11z" target="_blank" rel="noreferrer"><MapIcon size={17} /> פתח גוגל מפות</a>
+        <button className="btn-ghost min-h-[42px] text-[15px]" disabled={finding} onClick={paste}><ClipboardPaste size={17} /> הדבק מקום</button>
+      </div>
+      {pasteOpen && (
+        <div className="mb-2">
+          <div className="flex gap-2">
+            <input className="input min-w-0 flex-1" dir="ltr" placeholder="maps.app.goo.gl/…" value={link} onChange={(e) => setLink(e.target.value)} aria-label="קישור מגוגל מפות" />
+            <button className="btn bg-terra px-4 text-white" disabled={!link.trim() || finding} onClick={() => fromText(link)}>מצא</button>
+          </div>
+          <p className="mt-1 text-[13px] text-muted">{findErr || 'בגוגל מפות: בוחרים מקום ← שיתוף ← העתקה, וחוזרים להדביק כאן.'}</p>
+        </div>
+      )}
       <div className="no-scrollbar -mx-4 mb-2 flex gap-2 overflow-x-auto px-4">
         {QUICK_PLACES.map((q) => (
           <button key={q} onClick={() => setTitle(q)} className={`min-h-[40px] shrink-0 rounded-full px-3 text-[15px] font-semibold ${title === q ? 'bg-terra text-white' : 'bg-surface2'}`}>{q}</button>
@@ -83,7 +123,7 @@ export function MeetingComposer({ onSave, onCancel }: { onSave: (title: string, 
         <input type="time" aria-label="שעה" className="input tnum h-10 min-h-0 w-[110px]" value={time} onChange={(e) => { setTime(e.target.value); setMins(null) }} />
       </div>
       <div className="mt-3 flex gap-2">
-        <button className="btn flex-1 bg-terra text-white" disabled={busy || !title.trim() || (mins == null && !time)} onClick={async () => { setBusy(true); try { await onSave(title.trim(), at()) } finally { setBusy(false) } }}>
+        <button className="btn flex-1 bg-terra text-white" disabled={busy || finding || !title.trim() || (mins == null && !time)} onClick={async () => { setBusy(true); try { await onSave(title.trim(), at()) } finally { setBusy(false) } }}>
           <MapPin size={18} /> {busy ? 'שולח…' : 'קבע נקודת מפגש'}
         </button>
         <button className="btn-ghost" onClick={onCancel}>ביטול</button>

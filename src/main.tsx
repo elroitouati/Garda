@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
 import App from './App'
 import './index.css'
+import { captureShare } from './lib/mapsLink'
+
+captureShare()
 
 registerSW({ immediate: true })
 
