@@ -7,7 +7,7 @@ import { useToast } from '../components/Toast'
 import { MEMBER_COLORS } from '../lib/members'
 import { useStore } from '../lib/store'
 import { hm, shortDate, weekdayLetter } from '../lib/time'
-import type { Activity, EmergencyContact, Household, Member, Place } from '../lib/types'
+import type { Activity, Day, EmergencyContact, Household, Member, Place } from '../lib/types'
 import { AvatarSetup } from './AvatarSetup'
 
 type Tab = 'members' | 'households' | 'schedule' | 'places' | 'pin'
@@ -207,7 +207,9 @@ function ScheduleTab() {
   const { api, busy, run } = useSave()
   const [day, setDay] = useState(() => data?.days[0]?.date ?? '')
   const [edit, setEdit] = useState<Activity | null>(null)
+  const [dayEdit, setDayEdit] = useState<Day | null>(null)
   if (!data) return null
+  const dayObj = data.days.find((d) => d.date === day)
   const list = data.activities.filter((a) => a.day === day).sort((a, b) => a.start_time.localeCompare(b.start_time))
   const placeName = (id: string | null) => data.places.find((p) => p.id === id)?.name_he ?? ''
   return (
@@ -219,6 +221,16 @@ function ScheduleTab() {
           </button>
         ))}
       </div>
+      {dayObj && (
+        <button className="mx-4 mb-3 flex w-[calc(100%-2rem)] items-center gap-3 rounded-3xl bg-surface p-4 text-start shadow-card" onClick={() => setDayEdit({ ...dayObj })}>
+          <span className="flex-1">
+            <span className="block text-sm text-muted">כותרת היום (מופיעה למעלה במפה)</span>
+            <span className="block text-lg font-semibold"><bdi>{dayObj.title}</bdi></span>
+            {dayObj.subtitle && <span className="block text-sm text-muted"><bdi>{dayObj.subtitle}</bdi></span>}
+          </span>
+          <span className="text-sm font-semibold text-green">עריכה</span>
+        </button>
+      )}
       <AddButton label="הוסף פעילות" onClick={() => setEdit({ id: '', day, start_time: '10:00', end_time: null, title: '', place_id: null, option_group: null, household_id: null, notes: null, sort: list.length + 1 })} />
       <ul className="mx-4 divide-y divide-line overflow-hidden rounded-3xl bg-surface shadow-card">
         {list.length === 0 && <li className="p-4 text-muted">אין פעילויות ביום הזה.</li>}
@@ -238,6 +250,18 @@ function ScheduleTab() {
           </li>
         ))}
       </ul>
+      {dayEdit && (
+        <Sheet title="כותרת היום" onClose={() => setDayEdit(null)}>
+          <Field label="כותרת"><input className="input" value={dayEdit.title} onChange={(e) => setDayEdit({ ...dayEdit, title: e.target.value })} /></Field>
+          <Field label="תת-כותרת"><input className="input" value={dayEdit.subtitle ?? ''} onChange={(e) => setDayEdit({ ...dayEdit, subtitle: e.target.value || null })} /></Field>
+          <FormButtons busy={busy}
+            onSave={async () => {
+              if (!dayEdit.title.trim()) return alert('צריך כותרת')
+              if (await run(() => api.upsert('days', { ...dayEdit, title: dayEdit.title.trim() }))) setDayEdit(null)
+            }}
+          />
+        </Sheet>
+      )}
       {edit && (
         <Sheet title={edit.id ? 'עריכת פעילות' : 'פעילות חדשה'} onClose={() => setEdit(null)}>
           <Field label="כותרת"><input className="input" value={edit.title} onChange={(e) => setEdit({ ...edit, title: e.target.value })} /></Field>
