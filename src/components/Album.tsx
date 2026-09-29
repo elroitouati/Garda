@@ -63,6 +63,10 @@ export function AlbumTab({ onOpen, onSlideshow, onAdd }: {
   const ids = (list: Photo[]) => list.map((p) => p.id)
   return (
     <div className="pt-1">
+      <div className="px-4 pb-3">
+        <button className="btn-primary w-full text-lg" onClick={onAdd}><Camera size={20} /> הוסף תמונות</button>
+      </div>
+
       {/* סינון לפי מי צילם */}
       <div className="no-scrollbar flex gap-2 overflow-x-auto px-4 pb-2" style={{ touchAction: 'pan-x' }} role="radiogroup" aria-label="של מי">
         <button role="radio" aria-checked={!who} onClick={() => setWho(null)}
@@ -124,9 +128,6 @@ export function AlbumTab({ onOpen, onSlideshow, onAdd }: {
         )
       })}
 
-      <div className="px-4 pt-4">
-        <button className="btn-primary w-full" onClick={onAdd}><Camera size={18} /> הוסף תמונות</button>
-      </div>
     </div>
   )
 }
