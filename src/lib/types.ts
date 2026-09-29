@@ -132,9 +132,12 @@ export type CommentLike = { comment_id: string; member_id: string }
 export type Poll = { id: string; created_by: string; question: string; options: string[]; closed: boolean; created_at: string }
 export type PollVote = { poll_id: string; member_id: string; option: number }
 
+/** טיפ של המשפחה למקום */
+export type PlaceTip = { id: string; created_by: string; place_id: string | null; lat: number; lng: number; place_name: string | null; body: string; created_at: string }
+
 export type LiveData = {
   messages: Message[]; reads: MessageRead[]; photos: Photo[]; locations: Location[]; meetings: Meeting[]
-  likes: PhotoLike[]; comments: PhotoComment[]; commentLikes: CommentLike[]; polls: Poll[]; votes: PollVote[]
+  likes: PhotoLike[]; comments: PhotoComment[]; commentLikes: CommentLike[]; polls: Poll[]; votes: PollVote[]; tips: PlaceTip[]
 }
 
 export type Location = {

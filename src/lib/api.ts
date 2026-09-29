@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 import type { Prepared } from './photos'
-import type { LiveData, Location, Meeting, Message, Photo, Poll, Reaction, TripData } from './types'
+import type { LiveData, Location, Meeting, Message, Photo, PlaceTip, Poll, Reaction, TripData } from './types'
 import { videoExt } from './video'
 
 export type PickMember = { id: string; name: string; color: string; initials: string | null; household?: string | null }
@@ -48,6 +48,9 @@ export interface Api {
   createPoll(p: Pick<Poll, 'created_by' | 'question' | 'options'>): Promise<void>
   vote(pollId: string, memberId: string, option: number | null): Promise<void>
   closePoll(id: string): Promise<void>
+  // טיפים למקומות
+  addTip(t: Omit<PlaceTip, 'id' | 'created_at'>): Promise<void>
+  deleteTip(id: string): Promise<void>
 }
 
 function must<T>(r: { data: T | null; error: unknown }): T {
@@ -140,7 +143,7 @@ const realApi = (): Api => {
     },
     async fetchLive() {
       const since = new Date(Date.now() - 4 * 86400000).toISOString()
-      const [messages, reads, photos, locations, meetings, likes, comments, commentLikes, polls, votes] = await Promise.all([
+      const [messages, reads, photos, locations, meetings, likes, comments, commentLikes, polls, votes, tips] = await Promise.all([
         sb.from('messages').select('*').gte('created_at', since).order('created_at', { ascending: false }),
         sb.from('message_reads').select('*').gte('read_at', since),
         sb.from('photos').select('*').order('taken_at', { ascending: false }),
@@ -151,10 +154,11 @@ const realApi = (): Api => {
         sb.from('comment_likes').select('comment_id,member_id'),
         sb.from('polls').select('*').gte('created_at', new Date(Date.now() - 3 * 86400_000).toISOString()).order('created_at', { ascending: false }),
         sb.from('poll_votes').select('poll_id,member_id,option'),
+        sb.from('place_tips').select('*').order('created_at', { ascending: false }),
       ])
       return {
         messages: must(messages), reads: must(reads), photos: must(photos), locations: locations.data ?? [], meetings: meetings.data ?? [],
-        likes: likes.data ?? [], comments: comments.data ?? [], commentLikes: commentLikes.data ?? [], polls: polls.data ?? [], votes: votes.data ?? [],
+        likes: likes.data ?? [], comments: comments.data ?? [], commentLikes: commentLikes.data ?? [], polls: polls.data ?? [], votes: votes.data ?? [], tips: tips.data ?? [],
       }
     },
     async sendMessage(m) {
@@ -223,6 +227,12 @@ const realApi = (): Api => {
     async closePoll(id) {
       must(await sb.from('polls').update({ closed: true }).eq('id', id))
     },
+    async addTip(t) {
+      must(await sb.from('place_tips').insert(t))
+    },
+    async deleteTip(id) {
+      must(await sb.from('place_tips').delete().eq('id', id))
+    },
     async setMyEmergencyPhone(phone) {
       const r = await sb.rpc('set_my_emergency_phone', { phone })
       if (r.error) return { error: 'network' }
@@ -230,7 +240,7 @@ const realApi = (): Api => {
     },
     subscribeLive(onChange) {
       const ch = sb.channel('live-changes')
-      for (const table of ['messages', 'message_reads', 'photos', 'locations', 'meetings', 'photo_likes', 'photo_comments', 'comment_likes', 'polls', 'poll_votes'])
+      for (const table of ['messages', 'message_reads', 'photos', 'locations', 'meetings', 'photo_likes', 'photo_comments', 'comment_likes', 'polls', 'poll_votes', 'place_tips'])
         ch.on('postgres_changes', { event: '*', schema: 'public', table }, onChange)
       ch.subscribe()
       return () => { sb.removeChannel(ch) }

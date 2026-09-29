@@ -1,10 +1,11 @@
-import { Camera, Check, ImagePlus, LocateFixed, MapPin, MessageCircle, Minus, Navigation, Plus, Shield, Play, Sparkles, Umbrella, Video, Vote, WifiOff, X } from 'lucide-react'
+import { Camera, Check, ImagePlus, LocateFixed, MapPin, MessageCircle, Minus, Navigation, Plus, Shield, Play, Sparkles, Umbrella, Video, WifiOff, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Avatar } from '../components/Avatar'
 import { BottomSheet, type Snap } from '../components/BottomSheet'
 import { AlbumTab, photoDay } from '../components/Album'
 import { Feed } from '../components/Feed'
 import { PollCard, PollComposer, usePolls } from '../components/Polls'
+import { PlaceTips, PostChooser, TipComposer } from '../components/Post'
 import { Gallery } from '../components/Gallery'
 import { pickStory, Story } from '../components/Story'
 import { Wrapped, WRAPPED_FROM } from '../components/Wrapped'
@@ -99,6 +100,8 @@ export function MainScreen() {
   const [meetDraft, setMeetDraft] = useState(false)
   const [sharedPlace, setSharedPlace] = useState<string | null>(null)
   const [pollOpen, setPollOpen] = useState(false)
+  const [postOpen, setPostOpen] = useState(false)
+  const [tipOpen, setTipOpen] = useState(false)
   // המקום המדויק מגוגל מפות; נשמר כל עוד לא הזיזו את המפה ביד
   const meetTarget = useRef<{ lat: number; lng: number; at: number } | null>(null)
   const [locHelpHidden, setLocHelpHidden] = useState(false)
@@ -174,6 +177,7 @@ export function MainScreen() {
   const day = selectedDay ?? (data?.days.some((d) => d.date === today) ? today : data?.days[0]?.date ?? today)
   const dayItems = useMemo(() => list.filter((a) => a.day === day), [list, day])
   const dayPlaceIds = useMemo(() => new Set(dayItems.map((a) => a.place_id).filter(Boolean) as string[]), [dayItems])
+  const dayPlaces = useMemo(() => (data?.places ?? []).filter((p) => dayPlaceIds.has(p.id)), [data, dayPlaceIds])
   const visiblePlaces = useMemo(() => (data?.places ?? []).filter((p) => p.main || dayPlaceIds.has(p.id) || p.id === selectedPlace?.id), [data, dayPlaceIds, selectedPlace])
   const rainPlaces = useMemo(() => (data?.places ?? []).filter((p) => p.rain_plan), [data])
   const dayObj = data?.days.find((d) => d.date === day)
@@ -327,7 +331,17 @@ export function MainScreen() {
       if (distance(loc.pos, place) > (t0.radius ?? 400)) continue
       setTip({ title: t0.title, body: t0.body })
       try { localStorage.setItem(key, JSON.stringify([...shown, pid])) } catch { /* ignore */ }
-      break
+      return
+    }
+    // טיפים של המשפחה: כל טיפ קופץ פעם אחת, למי שמגיע למקום (לא למי שכתב)
+    const seenKey = 'garda-family-tips'
+    let seen: string[] = []
+    try { seen = JSON.parse(localStorage.getItem(seenKey) || '[]') } catch { /* ignore */ }
+    const near = live.tips.find((x) => x.created_by !== me?.id && !seen.includes(x.id) && distance(loc.pos!, x) < 350)
+    if (near) {
+      const who = data.members.find((m) => m.id === near.created_by)?.name ?? ''
+      setTip({ title: `💡 ${who}${near.place_name ? ` · ${near.place_name}` : ''}`, body: near.body })
+      try { localStorage.setItem(seenKey, JSON.stringify([...seen, near.id])) } catch { /* ignore */ }
     }
   }, [loc.pos?.lat, loc.pos?.lng]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -391,9 +405,8 @@ export function MainScreen() {
   const TABS: ['day' | 'family' | 'album' | 'info', string, number][] = [['day', 'היום', 0], ['family', 'משפחה', unread], ['album', 'אלבום', newPhotos], ['info', 'מידע', 0]]
   const fabActions: { key: string; label: string; icon: React.ReactNode; tone: string; run: () => void }[] = [
     { key: 'photo', label: 'תמונה לאלבום', icon: <Camera size={20} />, tone: 'bg-green text-white', run: () => setCameraMenu(true) },
-    { key: 'msg', label: 'הודעה למשפחה', icon: <MessageCircle size={20} />, tone: 'bg-surface text-ink', run: () => setCompose(true) },
+    { key: 'post', label: 'הודעה / סקר / טיפ', icon: <MessageCircle size={20} />, tone: 'bg-surface text-ink', run: () => setPostOpen(true) },
     { key: 'meet', label: 'נקודת מפגש', icon: <MapPin size={20} />, tone: 'bg-surface text-terra', run: () => startMeeting() },
-    { key: 'poll', label: 'סקר משפחתי', icon: <Vote size={20} />, tone: 'bg-surface text-green', run: () => setPollOpen(true) },
   ]
 
   return (
@@ -531,6 +544,7 @@ export function MainScreen() {
               </div>
               <button className="-m-1 grid h-11 w-11 place-items-center text-muted" onClick={() => setSelectedPlace(null)} aria-label="סגור"><X size={20} /></button>
             </div>
+            <PlaceTips tips={live.tips.filter((x) => x.place_id === selectedPlace.id || distance(x, selectedPlace) < 150)} />
             <div className="mt-2 flex gap-2">
               <a className="btn-primary flex-1 text-[15px]" href={wazeLink(selectedPlace.lat, selectedPlace.lng)} target="_blank" rel="noreferrer"><Navigation size={17} /> Waze</a>
               <a className="btn-ghost flex-1 text-[15px]" href={googleLink(selectedPlace.lat, selectedPlace.lng)} target="_blank" rel="noreferrer"><MapPin size={17} /> גוגל מפות</a>
@@ -659,6 +673,8 @@ export function MainScreen() {
           setPhoneLater(true)
         }} />
       )}
+      {postOpen && <PostChooser onClose={() => setPostOpen(false)} onPick={(k) => { setPostOpen(false); if (k === 'message') setCompose(true); else if (k === 'poll') setPollOpen(true); else setTipOpen(true) }} />}
+      {tipOpen && <TipComposer dayPlaces={dayPlaces} myPos={loc.pos} onClose={() => setTipOpen(false)} />}
       {pollOpen && <PollComposer onClose={() => setPollOpen(false)} />}
       {compose && <ComposeSheet onClose={() => setCompose(false)} shareLocation={loc.sharing} />}
       {cameraMenu && (

@@ -80,7 +80,7 @@ export function demoApi(): Api {
   const fake = (member_id: string, lat: number, lng: number, minAgo: number, sharing = true): Location =>
     ({ member_id, lat, lng, accuracy: 15, heading: null, sharing, updated_at: new Date(Date.now() - minAgo * 60000).toISOString() })
   const live: LiveData = {
-    messages: [], reads: [], photos: [], meetings: [], likes: [], comments: [], commentLikes: [], polls: [], votes: [],
+    messages: [], reads: [], photos: [], meetings: [], likes: [], comments: [], commentLikes: [], polls: [], votes: [], tips: [],
     locations: [
       fake('yatir', 45.5212, 10.5391, 1), fake('sharon', 45.5214, 10.5385, 2), fake('shiilo', 45.5209, 10.5388, 0),
       fake('etel', 45.5245, 10.5293, 4), fake('gil', 45.5362, 10.5357, 25), fake('eva', 45.5263, 10.5331, 1),
@@ -206,6 +206,8 @@ export function demoApi(): Api {
       if (option != null) live.votes.push({ poll_id: pollId, member_id: memberId, option })
       emitLive()
     },
+    async addTip(t) { live.tips.unshift({ ...t, id: id(), created_at: new Date().toISOString() }); emitLive() },
+    async deleteTip(tid) { live.tips = live.tips.filter((x) => x.id !== tid); emitLive() },
     async closePoll(pid) {
       const p = live.polls.find((x) => x.id === pid)
       if (p) p.closed = true
