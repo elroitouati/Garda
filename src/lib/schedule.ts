@@ -4,11 +4,11 @@ import type { Activity, Member, Place, TripData } from './types'
 
 export type Timed = Activity & { start: Date; end: Date; place: Place | null }
 
-/** הפעילויות שאני רואה: משותפות + של המשפחה שלי */
+/** הפעילויות שאני רואה: משותפות (חוץ ממה שהוסתר מהמשפחה שלי) + של המשפחה שלי */
 export function myActivities(data: TripData, me: Member | null): Timed[] {
   const places = new Map(data.places.map((p) => [p.id, p]))
   const acts = data.activities
-    .filter((a) => !a.household_id || a.household_id === me?.household_id)
+    .filter((a) => (!a.household_id || a.household_id === me?.household_id) && !(me && a.hidden_for?.includes(me.household_id)))
     .slice()
     .sort((a, b) => a.day.localeCompare(b.day) || a.start_time.localeCompare(b.start_time) || a.sort - b.sort)
   return acts.map((a) => {

@@ -48,6 +48,7 @@ export type Activity = {
   place_id: string | null
   option_group: 'A' | 'B' | null
   household_id: string | null
+  hidden_for?: string[] // משפחות שלא רואות את הפעילות המשותפת
   notes: string | null
   sort: number
 }
