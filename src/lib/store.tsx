@@ -52,7 +52,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   avatarsRef.current = avatars
 
   const [liveReady, setLiveReady] = useState(false)
-  const [live, setLive] = useState<LiveData>({ messages: [], reads: [], photos: [], locations: [], meetings: [], likes: [], comments: [] })
+  const [live, setLive] = useState<LiveData>({ messages: [], reads: [], photos: [], locations: [], meetings: [], likes: [], comments: [], commentLikes: [], polls: [], votes: [] })
 
   // מטמון כתובות חתומות לשני הדליים (בתוקף 7 ימים, מתחדש יום לפני)
   const signing = useRef(new Set<string>())

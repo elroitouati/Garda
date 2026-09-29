@@ -30,11 +30,13 @@ export function useLikeCounts() {
   }, [live.likes])
 }
 
-export function AlbumTab({ onOpen, onSlideshow, onAdd, onFeed }: {
+export function AlbumTab({ onOpen, onSlideshow, onAdd, onFeed, onWrapped, wrappedPreview }: {
   onOpen: (ids: string[], start: number) => void
   onSlideshow: (ids: string[]) => void
   onAdd: () => void
   onFeed: () => void
+  onWrapped?: () => void
+  wrappedPreview?: boolean
 }) {
   const { live, data, photoUrl, api, me, refreshLive } = useStore()
   const toast = useToast()
@@ -91,6 +93,14 @@ export function AlbumTab({ onOpen, onSlideshow, onAdd, onFeed }: {
         <button className="btn-ghost text-lg" onClick={onFeed}><Clapperboard size={20} /> גלילה</button>
       </div>
       <p className="-mt-1 px-4 pb-2 text-center text-[13px] text-muted">טיפ: במסך מלא, החלקה ימינה פותחת את הגלילה</p>
+      {onWrapped && (
+        <div className="px-4 pb-3">
+          <button className="flex w-full items-center gap-3 rounded-2xl bg-gradient-to-l from-[#1768B0] via-[#B8467A] to-[#D34838] p-3.5 text-start text-white shadow-card" onClick={onWrapped}>
+            <Sparkles size={22} className="text-lemon" />
+            <span className="flex-1"><span className="block font-bold">Wrapped של הטיול</span><span className="block text-[13px] opacity-90">{wrappedPreview ? 'תצוגה מקדימה למנהלים · נפתח לכולם במוצאי שבת' : 'כל הטיול במספרים'}</span></span>
+          </button>
+        </div>
+      )}
 
       {/* סינון לפי מי צילם */}
       <div className="no-scrollbar flex gap-2 overflow-x-auto px-4 pb-2" style={{ touchAction: 'pan-x' }} role="radiogroup" aria-label="של מי">

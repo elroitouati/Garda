@@ -1,11 +1,13 @@
-import { Camera, Check, ImagePlus, LocateFixed, MapPin, MessageCircle, Minus, Navigation, Plus, Shield, Umbrella, Video, WifiOff, X } from 'lucide-react'
+import { Camera, Check, ImagePlus, LocateFixed, MapPin, MessageCircle, Minus, Navigation, Plus, Shield, Play, Sparkles, Umbrella, Video, Vote, WifiOff, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Avatar } from '../components/Avatar'
 import { BottomSheet, type Snap } from '../components/BottomSheet'
-import { AlbumTab } from '../components/Album'
+import { AlbumTab, photoDay } from '../components/Album'
 import { Feed } from '../components/Feed'
+import { PollCard, PollComposer, usePolls } from '../components/Polls'
 import { Gallery } from '../components/Gallery'
-import { Slideshow } from '../components/Slideshow'
+import { pickStory, Story } from '../components/Story'
+import { Wrapped, WRAPPED_FROM } from '../components/Wrapped'
 import { Welcome } from '../components/Welcome'
 import { EmergencyPhonePrompt, FridayCard, LocationConsent, LocationHelp, MeetingCard, MeetingComposer, MeetingPopup, PushCard, ShabbatScreen, TipCard, useWalkingRoute } from '../components/Live'
 import { ComposeSheet, MessageHistory, MessagePopups } from '../components/Messages'
@@ -25,6 +27,7 @@ import { googleLink, wazeLink } from '../lib/nav'
 import { preparePhoto, prepareVideo } from '../lib/photos'
 import { isVideoFile, unlockMedia, VideoError } from '../lib/video'
 import { looksLikeMaps, takeShare } from '../lib/mapsLink'
+import { onOpenMessage, takeOpen, type OpenRequest } from '../lib/deeplink'
 import { enqueue, flush, pendingCount } from '../lib/uploadQueue'
 import { myActivities, useNow } from '../lib/schedule'
 import { useStore } from '../lib/store'
@@ -59,7 +62,8 @@ export function MainScreen() {
   // ממשק המפה מתגלה רק אחרי מסך הפתיחה
   const [revealed, setRevealed] = useState(() => welcome === null)
   const [fabOpen, setFabOpen] = useState(false)
-  const [slideshow, setSlideshow] = useState<string[] | null>(null)
+  const [story, setStory] = useState<{ day: string; ids: string[] | null } | null>(null)
+  const [wrapped, setWrapped] = useState(false)
   const [pending, setPending] = useState(0)
   // תמונות שממתינות לקליטה: מנסים שוב כשחוזרת רשת, בפתיחה, וכל חצי דקה
   useEffect(() => {
@@ -94,6 +98,7 @@ export function MainScreen() {
   const [filter, setFilter] = useState<'all' | 'mine'>('all')
   const [meetDraft, setMeetDraft] = useState(false)
   const [sharedPlace, setSharedPlace] = useState<string | null>(null)
+  const [pollOpen, setPollOpen] = useState(false)
   // המקום המדויק מגוגל מפות; נשמר כל עוד לא הזיזו את המפה ביד
   const meetTarget = useRef<{ lat: number; lng: number; at: number } | null>(null)
   const [locHelpHidden, setLocHelpHidden] = useState(false)
@@ -290,6 +295,15 @@ export function MainScreen() {
     if (at) mapRef.current?.flyTo(at, 16)
   }
 
+  // פתיחה מהתראה: הסיפור של היום או ה-Wrapped
+  useEffect(() => {
+    if (!data || !me || welcome || !settled) return
+    const handle = (r: OpenRequest) => { if ('story' in r) setStory({ day: r.story, ids: null }); else setWrapped(true) }
+    const r = takeOpen()
+    if (r) handle(r)
+    return onOpenMessage(handle)
+  }, [!!data, !!me, !!welcome, settled]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // מקום ששותף מגוגל מפות לאפליקציה (אנדרואיד) פותח נקודת מפגש
   useEffect(() => {
     if (!data || !me || welcome || !settled) return // אחרי אנימציית הפתיחה, שלא תזיז את המפה בחזרה
@@ -324,6 +338,23 @@ export function MainScreen() {
     if (snap === 2) setSnap(1)
     mapRef.current?.flyTo(p, 14.5)
   }
+
+  const polls = usePolls()
+
+  // הסיפור של היום והרגעים הכי אהובים
+  const reactionCount = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const l of live.likes) m.set(l.photo_id, (m.get(l.photo_id) ?? 0) + 1)
+    return m
+  }, [live.likes])
+  const storyPhotos = useMemo(() => {
+    if (!story) return []
+    if (story.ids) { const set = new Set(story.ids); return photos.filter((p) => set.has(p.id)).sort((a, b) => a.taken_at.localeCompare(b.taken_at)) }
+    return pickStory(photos, story.day, reactionCount)
+  }, [story, photos, reactionCount])
+  const wrappedOpen = t >= WRAPPED_FROM
+  const todayCount = useMemo(() => photos.filter((p) => photoDay(p) === today).length, [photos, today])
+  const eveningStory = !!data?.days.some((d) => d.date === today) && Number(t.toLocaleString('en-GB', { timeZone: 'Europe/Rome', hour: '2-digit', hour12: false })) >= 20 && todayCount >= 3
 
   if (!data) {
     return (
@@ -362,6 +393,7 @@ export function MainScreen() {
     { key: 'photo', label: 'תמונה לאלבום', icon: <Camera size={20} />, tone: 'bg-green text-white', run: () => setCameraMenu(true) },
     { key: 'msg', label: 'הודעה למשפחה', icon: <MessageCircle size={20} />, tone: 'bg-surface text-ink', run: () => setCompose(true) },
     { key: 'meet', label: 'נקודת מפגש', icon: <MapPin size={20} />, tone: 'bg-surface text-terra', run: () => startMeeting() },
+    { key: 'poll', label: 'סקר משפחתי', icon: <Vote size={20} />, tone: 'bg-surface text-green', run: () => setPollOpen(true) },
   ]
 
   return (
@@ -515,6 +547,18 @@ export function MainScreen() {
             onShow={() => { setSnap(0); mapRef.current?.fit([meeting, ...people.filter((p) => !p.stale)], { maxZoom: 17 }) }}
             onCancel={async () => { if (!confirm('לבטל את נקודת המפגש?')) return; try { await api?.cancelMeeting(meeting.id); await refreshLive(); toast('נקודת המפגש בוטלה') } catch { toast('לא הצלחתי לבטל') } }} />
         )}
+        {eveningStory && (
+          <button className="mx-4 mb-3 flex w-[calc(100%-2rem)] items-center gap-3 rounded-3xl bg-gradient-to-l from-[#1768B0] to-[#D34838] p-4 text-start text-white shadow-card"
+            onClick={() => setStory({ day: today, ids: null })}>
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/20"><Sparkles size={22} /></span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-lg font-bold">הסיפור של היום מוכן</span>
+              <span className="tnum block text-[14px] opacity-90">{todayCount} רגעים מהיום · לצפייה</span>
+            </span>
+            <Play size={22} className="fill-white" />
+          </button>
+        )}
+        {polls.map((p) => <PollCard key={p.id} poll={p} />)}
         <NextCard list={list} t={t} />
 
         {/* לשוניות: כל דבר במקום שלו */}
@@ -578,7 +622,8 @@ export function MainScreen() {
           )}
 
           {tab === 'album' && (
-            <AlbumTab onOpen={(ids, st) => setGallery({ ids, start: st })} onSlideshow={(ids) => setSlideshow(ids)} onAdd={() => setCameraMenu(true)} onFeed={() => setFeed({ startId: null })} />
+            <AlbumTab onOpen={(ids, st) => setGallery({ ids, start: st })} onSlideshow={(ids) => { const f = photos.find((p) => p.id === ids[0]); if (f) setStory({ day: photoDay(f), ids }) }} onAdd={() => setCameraMenu(true)} onFeed={() => setFeed({ startId: null })}
+              onWrapped={wrappedOpen || me?.is_admin ? () => setWrapped(true) : undefined} wrappedPreview={!wrappedOpen} />
           )}
 
           {tab === 'info' && (
@@ -614,6 +659,7 @@ export function MainScreen() {
           setPhoneLater(true)
         }} />
       )}
+      {pollOpen && <PollComposer onClose={() => setPollOpen(false)} />}
       {compose && <ComposeSheet onClose={() => setCompose(false)} shareLocation={loc.sharing} />}
       {cameraMenu && (
         <div className="fixed inset-0 z-[75] flex items-end bg-black/40" onClick={() => setCameraMenu(false)}>
@@ -636,7 +682,8 @@ export function MainScreen() {
           onPlace={(p) => { setGallery(null); setSelectedPlace(null); setSnap(0); setPlacing(p); mapRef.current?.flyTo(p, 15) }} />
       )}
       {feed && <Feed startId={feed.startId} onClose={() => setFeed(null)} />}
-      {slideshow && <Slideshow photos={photos.filter((p) => slideshow.includes(p.id))} onClose={() => setSlideshow(null)} />}
+      {story && storyPhotos.length > 0 && <Story day={story.day} photos={storyPhotos} onClose={() => setStory(null)} onFeed={() => { setStory(null); setFeed({ startId: null }) }} />}
+      {wrapped && <Wrapped preview={!wrappedOpen} onClose={() => setWrapped(false)} />}
       {overlay === 'settings' && <Settings onClose={() => setOverlay(null)} />}
       {overlay === 'emergency' && <EmergencyCard onClose={() => setOverlay(null)} />}
       {avatarPrompt && me && settled && (

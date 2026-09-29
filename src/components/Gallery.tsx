@@ -1,9 +1,11 @@
-import { Check, Download, Heart, LocateFixed, MapPin, MessageCircle, Play, Send, Trash2, X } from 'lucide-react'
+import { Check, Download, Heart, LocateFixed, MapPin, MessageCircle, Play, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { cachedFile, fetchPhotoFile, saveFiles } from '../lib/photos'
 import { useStore } from '../lib/store'
 import type { Photo } from '../lib/types'
 import { Avatar } from './Avatar'
+import { CommentsSheet } from './CommentsSheet'
+import { ReactionButton } from './Reactions'
 import { useToast } from './Toast'
 
 const CHUNK = 20
@@ -24,7 +26,6 @@ export function Gallery({ photos, start, onClose, onPlace, startComments = false
   const lastTap = useRef(0)
   const [burst, setBurst] = useState(0)
   const [showComments, setShowComments] = useState(startComments)
-  const [draft, setDraft] = useState('')
   const stripRef = useRef<HTMLDivElement>(null)
   const p = photos[i]
 
@@ -59,12 +60,7 @@ export function Gallery({ photos, start, onClose, onPlace, startComments = false
     if (!api || !me || on === liked) return
     try { await api.setLike(p.id, me.id, on); await refreshLive() } catch { toast('לא הצלחתי. בדוק קליטה.') }
   }
-  const sendComment = async () => {
-    const t = draft.trim()
-    if (!t || !api || !me) return
-    setDraft('')
-    try { await api.addComment(p.id, me.id, t); await refreshLive() } catch { setDraft(t); toast('התגובה לא נשלחה. בדוק קליטה.') }
-  }
+
 
   const saveOne = async () => {
     try {
@@ -166,9 +162,7 @@ export function Gallery({ photos, start, onClose, onPlace, startComments = false
 
       {/* לבבות ותגובות */}
       <div className="flex items-center gap-2 px-3 pt-2">
-        <button className="flex min-h-[44px] items-center gap-2 rounded-full bg-white/10 px-4 font-semibold" onClick={() => toggleLike()} aria-pressed={liked} aria-label={liked ? 'הסר לב' : 'לב'}>
-          <Heart size={20} className={liked ? 'fill-[#FF5A5F] text-[#FF5A5F]' : ''} /><bdi className="tnum">{likers.length || ''}</bdi>
-        </button>
+        <ReactionButton photo={p} layout="row" />
         {likers.length > 0 && (
           <span className="flex -space-x-2 space-x-reverse" aria-label={`אהבו: ${likers.map((m) => m.name).join(', ')}`}>
             {likers.slice(0, 5).map((m) => <Avatar key={m.id} member={m} size={26} />)}
@@ -219,40 +213,7 @@ export function Gallery({ photos, start, onClose, onPlace, startComments = false
           </>
         )}
       </div>
-      {showComments && (
-        <div className="absolute inset-0 z-10 flex flex-col justify-end bg-black/50" onClick={() => setShowComments(false)}>
-          <div className="max-h-[70dvh] rounded-t-[28px] bg-[#1A2236] p-4 pb-[calc(var(--safe-bottom)+12px)] animate-rise" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-lg text-white">תגובות</h3>
-              <button className="grid h-11 w-11 place-items-center text-white/70" onClick={() => setShowComments(false)} aria-label="סגור"><X size={20} /></button>
-            </div>
-            <ul className="max-h-[42dvh] space-y-3 overflow-y-auto">
-              {comments.length === 0 && <li className="text-white/60">עוד אין תגובות. תהיו הראשונים.</li>}
-              {comments.map((c) => {
-                const m = data?.members.find((x) => x.id === c.member_id)
-                const mine = c.member_id === me?.id
-                return (
-                  <li key={c.id} className="flex items-start gap-2.5">
-                    {m && <Avatar member={m} size={32} />}
-                    <div className="min-w-0 flex-1 rounded-2xl bg-white/10 px-3 py-2 text-white">
-                      <div className="text-[13px] font-bold opacity-80">{m?.name}</div>
-                      <div className="text-[16px] leading-snug"><bdi>{c.body}</bdi></div>
-                    </div>
-                    {(mine || me?.is_admin) && (
-                      <button className="grid h-9 w-9 place-items-center text-white/50" aria-label="מחק תגובה" onClick={async () => { try { await api?.deleteComment(c.id); await refreshLive() } catch { /* ignore */ } }}><Trash2 size={15} /></button>
-                    )}
-                  </li>
-                )
-              })}
-            </ul>
-            <div className="mt-3 flex gap-2">
-              <input className="input flex-1 border-white/15 bg-white/10 text-white placeholder:text-white/40" maxLength={300} placeholder="כתוב תגובה…" value={draft}
-                onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void sendComment() }} />
-              <button className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#1768B0] text-white disabled:opacity-40" disabled={!draft.trim()} onClick={sendComment} aria-label="שלח"><Send size={18} /></button>
-            </div>
-          </div>
-        </div>
-      )}
+      {showComments && <CommentsSheet photo={p} onClose={() => setShowComments(false)} />}
     </div>
   )
 }

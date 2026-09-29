@@ -80,7 +80,7 @@ export function demoApi(): Api {
   const fake = (member_id: string, lat: number, lng: number, minAgo: number, sharing = true): Location =>
     ({ member_id, lat, lng, accuracy: 15, heading: null, sharing, updated_at: new Date(Date.now() - minAgo * 60000).toISOString() })
   const live: LiveData = {
-    messages: [], reads: [], photos: [], meetings: [], likes: [], comments: [],
+    messages: [], reads: [], photos: [], meetings: [], likes: [], comments: [], commentLikes: [], polls: [], votes: [],
     locations: [
       fake('yatir', 45.5212, 10.5391, 1), fake('sharon', 45.5214, 10.5385, 2), fake('shiilo', 45.5209, 10.5388, 0),
       fake('etel', 45.5245, 10.5293, 4), fake('gil', 45.5362, 10.5357, 25), fake('eva', 45.5263, 10.5331, 1),
@@ -187,8 +187,32 @@ export function demoApi(): Api {
       if (on) live.likes.push({ photo_id: photoId, member_id: memberId, created_at: new Date().toISOString() })
       emitLive()
     },
-    async addComment(photoId, memberId, body) {
-      live.comments.push({ id: id(), photo_id: photoId, member_id: memberId, body, created_at: new Date().toISOString() })
+    async setReaction(photoId, memberId, emoji) {
+      live.likes = live.likes.filter((l) => !(l.photo_id === photoId && l.member_id === memberId))
+      if (emoji) live.likes.push({ photo_id: photoId, member_id: memberId, emoji, created_at: new Date().toISOString() })
+      emitLive()
+    },
+    async setCommentLike(commentId, memberId, on) {
+      live.commentLikes = live.commentLikes.filter((l) => !(l.comment_id === commentId && l.member_id === memberId))
+      if (on) live.commentLikes.push({ comment_id: commentId, member_id: memberId })
+      emitLive()
+    },
+    async createPoll(p) {
+      live.polls.unshift({ ...p, id: id(), closed: false, created_at: new Date().toISOString() })
+      emitLive()
+    },
+    async vote(pollId, memberId, option) {
+      live.votes = live.votes.filter((v) => !(v.poll_id === pollId && v.member_id === memberId))
+      if (option != null) live.votes.push({ poll_id: pollId, member_id: memberId, option })
+      emitLive()
+    },
+    async closePoll(pid) {
+      const p = live.polls.find((x) => x.id === pid)
+      if (p) p.closed = true
+      emitLive()
+    },
+    async addComment(photoId, memberId, body, parentId = null) {
+      live.comments.push({ id: id(), photo_id: photoId, member_id: memberId, body, parent_id: parentId, created_at: new Date().toISOString() })
       emitLive()
     },
     async deleteComment(cid) { live.comments = live.comments.filter((c) => c.id !== cid); emitLive() },

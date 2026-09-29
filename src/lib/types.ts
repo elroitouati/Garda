@@ -122,12 +122,19 @@ export type Photo = {
   created_at: string
 }
 
-export type PhotoLike = { photo_id: string; member_id: string; created_at: string }
-export type PhotoComment = { id: string; photo_id: string; member_id: string; body: string; created_at: string }
+export const REACTIONS = ['❤️', '😂', '😍', '🔥', '😮', '👏'] as const
+export type Reaction = (typeof REACTIONS)[number]
+/** תגובה לתמונה: לב או אימוג'י אחר (אחת לכל אדם) */
+export type PhotoLike = { photo_id: string; member_id: string; created_at: string; emoji?: Reaction }
+export type PhotoComment = { id: string; photo_id: string; member_id: string; body: string; created_at: string; parent_id?: string | null }
+export type CommentLike = { comment_id: string; member_id: string }
+
+export type Poll = { id: string; created_by: string; question: string; options: string[]; closed: boolean; created_at: string }
+export type PollVote = { poll_id: string; member_id: string; option: number }
 
 export type LiveData = {
   messages: Message[]; reads: MessageRead[]; photos: Photo[]; locations: Location[]; meetings: Meeting[]
-  likes: PhotoLike[]; comments: PhotoComment[]
+  likes: PhotoLike[]; comments: PhotoComment[]; commentLikes: CommentLike[]; polls: Poll[]; votes: PollVote[]
 }
 
 export type Location = {

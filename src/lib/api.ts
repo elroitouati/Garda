@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 import type { Prepared } from './photos'
-import type { LiveData, Location, Meeting, Message, Photo, TripData } from './types'
+import type { LiveData, Location, Meeting, Message, Photo, Poll, Reaction, TripData } from './types'
 import { videoExt } from './video'
 
 export type PickMember = { id: string; name: string; color: string; initials: string | null; household?: string | null }
@@ -39,8 +39,15 @@ export interface Api {
   setMyEmergencyPhone(phone: string): Promise<RpcResult>
   // אלבום
   setLike(photoId: string, memberId: string, on: boolean): Promise<void>
-  addComment(photoId: string, memberId: string, body: string): Promise<void>
+  /** null = הסר את התגובה שלי */
+  setReaction(photoId: string, memberId: string, emoji: Reaction | null): Promise<void>
+  addComment(photoId: string, memberId: string, body: string, parentId?: string | null): Promise<void>
   deleteComment(id: string): Promise<void>
+  setCommentLike(commentId: string, memberId: string, on: boolean): Promise<void>
+  // סקרים
+  createPoll(p: Pick<Poll, 'created_by' | 'question' | 'options'>): Promise<void>
+  vote(pollId: string, memberId: string, option: number | null): Promise<void>
+  closePoll(id: string): Promise<void>
 }
 
 function must<T>(r: { data: T | null; error: unknown }): T {
@@ -133,7 +140,7 @@ const realApi = (): Api => {
     },
     async fetchLive() {
       const since = new Date(Date.now() - 4 * 86400000).toISOString()
-      const [messages, reads, photos, locations, meetings, likes, comments] = await Promise.all([
+      const [messages, reads, photos, locations, meetings, likes, comments, commentLikes, polls, votes] = await Promise.all([
         sb.from('messages').select('*').gte('created_at', since).order('created_at', { ascending: false }),
         sb.from('message_reads').select('*').gte('read_at', since),
         sb.from('photos').select('*').order('taken_at', { ascending: false }),
@@ -141,8 +148,14 @@ const realApi = (): Api => {
         sb.from('meetings').select('*').eq('active', true).gte('meet_at', new Date(Date.now() - 3 * 3600_000).toISOString()).order('created_at', { ascending: false }),
         sb.from('photo_likes').select('*'),
         sb.from('photo_comments').select('*').order('created_at'),
+        sb.from('comment_likes').select('comment_id,member_id'),
+        sb.from('polls').select('*').gte('created_at', new Date(Date.now() - 3 * 86400_000).toISOString()).order('created_at', { ascending: false }),
+        sb.from('poll_votes').select('poll_id,member_id,option'),
       ])
-      return { messages: must(messages), reads: must(reads), photos: must(photos), locations: locations.data ?? [], meetings: meetings.data ?? [], likes: likes.data ?? [], comments: comments.data ?? [] }
+      return {
+        messages: must(messages), reads: must(reads), photos: must(photos), locations: locations.data ?? [], meetings: meetings.data ?? [],
+        likes: likes.data ?? [], comments: comments.data ?? [], commentLikes: commentLikes.data ?? [], polls: polls.data ?? [], votes: votes.data ?? [],
+      }
     },
     async sendMessage(m) {
       must(await sb.from('messages').insert(m))
@@ -186,11 +199,29 @@ const realApi = (): Api => {
       if (on) must(await sb.from('photo_likes').upsert({ photo_id: photoId, member_id: memberId }))
       else must(await sb.from('photo_likes').delete().eq('photo_id', photoId).eq('member_id', memberId))
     },
-    async addComment(photoId, memberId, body) {
-      must(await sb.from('photo_comments').insert({ photo_id: photoId, member_id: memberId, body }))
+    async setReaction(photoId, memberId, emoji) {
+      if (emoji) must(await sb.from('photo_likes').upsert({ photo_id: photoId, member_id: memberId, emoji }))
+      else must(await sb.from('photo_likes').delete().eq('photo_id', photoId).eq('member_id', memberId))
+    },
+    async addComment(photoId, memberId, body, parentId = null) {
+      must(await sb.from('photo_comments').insert({ photo_id: photoId, member_id: memberId, body, parent_id: parentId }))
     },
     async deleteComment(id) {
       must(await sb.from('photo_comments').delete().eq('id', id))
+    },
+    async setCommentLike(commentId, memberId, on) {
+      if (on) must(await sb.from('comment_likes').upsert({ comment_id: commentId, member_id: memberId }))
+      else must(await sb.from('comment_likes').delete().eq('comment_id', commentId).eq('member_id', memberId))
+    },
+    async createPoll(p) {
+      must(await sb.from('polls').insert(p))
+    },
+    async vote(pollId, memberId, option) {
+      if (option == null) must(await sb.from('poll_votes').delete().eq('poll_id', pollId).eq('member_id', memberId))
+      else must(await sb.from('poll_votes').upsert({ poll_id: pollId, member_id: memberId, option }))
+    },
+    async closePoll(id) {
+      must(await sb.from('polls').update({ closed: true }).eq('id', id))
     },
     async setMyEmergencyPhone(phone) {
       const r = await sb.rpc('set_my_emergency_phone', { phone })
@@ -199,7 +230,7 @@ const realApi = (): Api => {
     },
     subscribeLive(onChange) {
       const ch = sb.channel('live-changes')
-      for (const table of ['messages', 'message_reads', 'photos', 'locations', 'meetings', 'photo_likes', 'photo_comments'])
+      for (const table of ['messages', 'message_reads', 'photos', 'locations', 'meetings', 'photo_likes', 'photo_comments', 'comment_likes', 'polls', 'poll_votes'])
         ch.on('postgres_changes', { event: '*', schema: 'public', table }, onChange)
       ch.subscribe()
       return () => { sb.removeChannel(ch) }

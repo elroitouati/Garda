@@ -73,6 +73,24 @@ Deno.serve(async (req) => {
       })
     }
     return new Response(JSON.stringify({ groups: byMember.size, sent: total }))
+  } else if (kind === 'poll') {
+    const { data: pl } = await sb.from('polls').select('*').eq('id', id).single()
+    if (!pl) return new Response('no poll')
+    to = people.filter((x) => x.id !== pl.created_by).map((x) => x.id)
+    payload = { title: `סקר מ${name(pl.created_by)}`, body: `${pl.question} · לחצו להצביע`, tag: `poll-${pl.id}`, important: false, url: APP_URL }
+  } else if (kind === 'daily') {
+    // הסיפור של היום: רק אם צולם משהו היום
+    const romeDay = (d: Date) => d.toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+    const today = romeDay(new Date())
+    const since = new Date(Date.now() - 30 * 3600_000).toISOString()
+    const { data: ph = [] } = await sb.from('photos').select('id,kind,taken_at').gte('taken_at', since)
+    const todays = (ph as { kind: string; taken_at: string }[]).filter((p) => romeDay(new Date(p.taken_at)) === today)
+    if (!todays.length && today !== '2026-10-04') return new Response('nothing today')
+    const v = todays.filter((p) => p.kind === 'video').length, n = todays.length - v
+    const parts = [n && (n === 1 ? 'תמונה אחת' : `${n} תמונות`), v && (v === 1 ? 'סרטון אחד' : `${v} סרטונים`)].filter(Boolean).join(' ו')
+    to = people.map((x) => x.id)
+    if (today === '2026-10-04') payload = { title: 'ה-Wrapped של הטיול מוכן 🎉', body: 'כל הטיול במספרים: הצלם של הטיול, הרגע הכי אהוב ועוד', tag: 'wrapped', important: false, url: `${APP_URL}?wrapped=1` }
+    else payload = { title: 'הסיפור של היום מוכן ✨', body: `${parts} מהיום. בואו לראות את הרגעים הכי אהובים`, tag: `daily-${today}`, important: false, url: `${APP_URL}?story=${today}` }
   } else return new Response('unknown kind', { status: 400 })
 
   if (!to.length) return new Response('nobody')

@@ -1,11 +1,12 @@
-import { Heart, MessageCircle, Send, Trash2, Volume2, VolumeX, X } from 'lucide-react'
+import { Heart, MessageCircle, Volume2, VolumeX, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../lib/store'
-import { ago } from '../lib/geo'
 import { romeDate } from '../lib/time'
 import type { Photo } from '../lib/types'
 import { formatDuration } from '../lib/video'
 import { Avatar } from './Avatar'
+import { CommentsSheet } from './CommentsSheet'
+import { ReactionButton } from './Reactions'
 import { useToast } from './Toast'
 
 const when = (iso: string) => new Date(iso).toLocaleString('he-IL', { timeZone: 'Europe/Rome', weekday: 'short', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -165,8 +166,6 @@ export function Feed({ startId, onClose }: { startId?: string | null; onClose: (
           const full = near ? photoUrl(p.path) : null
           const thumb = photoUrl(p.thumb_path)
           const by = data?.members.find((m) => m.id === p.member_id)
-          const likers = likes.get(p.id) ?? []
-          const liked = !!me && likers.includes(me.id)
           const nComments = comments.get(p.id) ?? 0
           const dayTitle = data?.days.find((d) => d.date === romeDate(new Date(p.taken_at)))?.title
           return (
@@ -187,12 +186,7 @@ export function Feed({ startId, onClose }: { startId?: string | null; onClose: (
 
               {/* פעולות בצד */}
               <div className={`absolute bottom-[calc(var(--safe-bottom)+96px)] end-3 flex flex-col items-center gap-5 transition-opacity ${talk ? 'pointer-events-none opacity-0' : ''}`}>
-                <button className="flex flex-col items-center gap-1" onClick={() => void like(p, !liked)} aria-pressed={liked} aria-label={liked ? 'הסר לב' : 'לב'}>
-                  <span className="grid h-12 w-12 place-items-center rounded-full bg-black/35 backdrop-blur-sm">
-                    <Heart size={28} className={liked ? 'fill-[#FF5A5F] text-[#FF5A5F]' : 'text-white'} />
-                  </span>
-                  <bdi className="tnum text-[14px] font-bold drop-shadow">{likers.length || ''}</bdi>
-                </button>
+                <ReactionButton photo={p} layout="column" />
                 <button className="flex flex-col items-center gap-1" onClick={() => setTalk(p)} aria-label="תגובות">
                   <span className="grid h-12 w-12 place-items-center rounded-full bg-black/35 backdrop-blur-sm"><MessageCircle size={26} /></span>
                   <bdi className="tnum text-[14px] font-bold drop-shadow">{nComments || ''}</bdi>
@@ -239,13 +233,13 @@ export function Feed({ startId, onClose }: { startId?: string | null; onClose: (
           <span className="flex items-center gap-1.5 rounded-full bg-black/55 px-3 py-1.5 text-[14px] font-semibold backdrop-blur-sm"><VolumeX size={16} /> נגיעה במסך מפעילה קול</span>
         </div>
       )}
-      {talk && <Comments photo={talk} onClose={() => setTalk(null)} />}
+      {talk && <CommentsSheet photo={talk} onClose={() => setTalk(null)} />}
       {!items.length && (
         <div className="absolute inset-0 grid place-items-center px-8 text-center text-white/75">
           {onlyVideos ? 'עוד אין סרטונים. מעלים סרטון מכפתור "הוסף" באלבום.' : 'עוד אין תמונות.'}
         </div>
       )}
-      {active === 0 && items.length > 1 && (
+      {active === 0 && items.length > 1 && !talk && (
         <div className="pointer-events-none absolute inset-x-0 top-[calc(var(--safe-top)+64px)] flex justify-center">
           <span className="animate-rise rounded-full bg-black/45 px-3 py-1 text-[13px] font-semibold backdrop-blur-sm">גוללים למעלה לעוד · לחיצה כפולה = לב · החלקה שמאלה = חזרה</span>
         </div>
@@ -254,83 +248,3 @@ export function Feed({ startId, onClose }: { startId?: string | null; onClose: (
   )
 }
 
-/** תגובות כמו בטיקטוק: הסרטון מתכווץ למעלה וממשיך להתנגן, התגובות נפתחות מלמטה */
-function Comments({ photo, onClose }: { photo: Photo; onClose: () => void }) {
-  const { live, data, me, api, refreshLive } = useStore()
-  const toast = useToast()
-  const [draft, setDraft] = useState('')
-  const [sending, setSending] = useState(false)
-  const [drag, setDrag] = useState(0)
-  const d0 = useRef<number | null>(null)
-  const listRef = useRef<HTMLUListElement>(null)
-  const list = live.comments.filter((c) => c.photo_id === photo.id)
-  const member = (id: string) => data?.members.find((m) => m.id === id)
-
-  useEffect(() => { listRef.current?.scrollTo({ top: listRef.current.scrollHeight }) }, [list.length])
-
-  const send = async () => {
-    const t = draft.trim()
-    if (!t || !api || !me || sending) return
-    setSending(true); setDraft('')
-    try { await api.addComment(photo.id, me.id, t); await refreshLive() } catch { setDraft(t); toast('התגובה לא נשלחה. בדוק קליטה.') }
-    setSending(false)
-  }
-
-  return (
-    <>
-      {/* נגיעה בסרטון המוקטן סוגרת */}
-      <button className="absolute inset-x-0 top-0 h-[34dvh]" onClick={onClose} aria-label="סגור תגובות" />
-      <div className="absolute inset-x-0 bottom-0 flex h-[66dvh] flex-col rounded-t-[22px] bg-surface text-ink animate-rise"
-        style={{ transform: drag ? `translateY(${drag}px)` : undefined, transition: drag ? 'none' : 'transform .2s' }}>
-        {/* גרירה למטה סוגרת */}
-        <div className="relative flex shrink-0 items-center justify-center border-b border-line px-4 pb-3 pt-4" style={{ touchAction: 'none' }}
-          onPointerDown={(e) => { d0.current = e.clientY; (e.target as HTMLElement).setPointerCapture?.(e.pointerId) }}
-          onPointerMove={(e) => { if (d0.current != null) setDrag(Math.max(0, e.clientY - d0.current)) }}
-          onPointerUp={() => { if (drag > 90) onClose(); setDrag(0); d0.current = null }}
-          onPointerCancel={() => { setDrag(0); d0.current = null }}>
-          <span className="absolute top-1.5 h-1 w-10 rounded-full bg-line" aria-hidden />
-          <h3 className="tnum text-[17px] font-bold">{list.length ? `${list.length} תגובות` : 'תגובות'}</h3>
-          <button className="absolute end-2 top-2 grid h-11 w-11 place-items-center text-muted" onClick={onClose} onPointerDown={(e) => e.stopPropagation()} aria-label="סגור"><X size={22} /></button>
-        </div>
-
-        <ul ref={listRef} className="flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4">
-          {list.length === 0 && (
-            <li className="flex flex-col items-center gap-2 pt-10 text-center text-muted">
-              <MessageCircle size={30} />
-              <span>עוד אין תגובות. תהיו הראשונים.</span>
-            </li>
-          )}
-          {list.map((c) => {
-            const m = member(c.member_id)
-            return (
-              <li key={c.id} className="flex items-start gap-3">
-                {m && <Avatar member={m} size={40} />}
-                <div className="min-w-0 flex-1">
-                  <div className="text-[14px] font-semibold text-muted">{c.member_id === me?.id ? 'אני' : m?.name}</div>
-                  <div className="text-[17px] leading-snug"><bdi>{c.body}</bdi></div>
-                  <div className="tnum mt-0.5 text-[13px] text-muted">{ago(c.created_at)}</div>
-                </div>
-                {(c.member_id === me?.id || me?.is_admin) && (
-                  <button className="grid h-9 w-9 place-items-center text-muted" aria-label="מחק תגובה"
-                    onClick={async () => { try { await api?.deleteComment(c.id); await refreshLive() } catch { toast('לא הצלחתי למחוק') } }}>
-                    <Trash2 size={16} />
-                  </button>
-                )}
-              </li>
-            )
-          })}
-        </ul>
-
-        <div className="flex shrink-0 items-center gap-2 border-t border-line px-3 pb-[calc(var(--safe-bottom)+10px)] pt-2.5">
-          {me && <Avatar member={me} size={38} />}
-          <input className="min-h-[44px] min-w-0 flex-1 rounded-full bg-surface2 px-4 text-[16px] outline-none placeholder:text-muted" maxLength={300}
-            placeholder="נא להוסיף תגובה…" value={draft} onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') void send() }} />
-          <button className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-green text-white disabled:opacity-40" disabled={!draft.trim() || sending} onClick={send} aria-label="שלח">
-            <Send size={18} />
-          </button>
-        </div>
-      </div>
-    </>
-  )
-}
