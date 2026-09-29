@@ -6,6 +6,7 @@ import { AlbumTab, photoDay } from '../components/Album'
 import { Feed } from '../components/Feed'
 import { PollCard, PollComposer, usePolls } from '../components/Polls'
 import { PlaceTips, PostChooser, TipComposer } from '../components/Post'
+import { SwipeAway } from '../components/SwipeAway'
 import { Gallery } from '../components/Gallery'
 import { pickStory, Story } from '../components/Story'
 import { Wrapped, WRAPPED_FROM } from '../components/Wrapped'
@@ -368,6 +369,9 @@ export function MainScreen() {
   }, [story, photos, reactionCount])
   const wrappedOpen = t >= WRAPPED_FROM
   const todayCount = useMemo(() => photos.filter((p) => photoDay(p) === today).length, [photos, today])
+  // הכרטיס מוסתר עד מחר אחרי החלקה הצידה
+  const [storyDismissed, setStoryDismissed] = useState(false)
+  useEffect(() => { try { setStoryDismissed(localStorage.getItem(`garda-story-hidden-${today}`) === '1') } catch { setStoryDismissed(false) } }, [today])
   const eveningStory = !!data?.days.some((d) => d.date === today) && Number(t.toLocaleString('en-GB', { timeZone: 'Europe/Rome', hour: '2-digit', hour12: false })) >= 20 && todayCount >= 3
 
   if (!data) {
@@ -561,16 +565,18 @@ export function MainScreen() {
             onShow={() => { setSnap(0); mapRef.current?.fit([meeting, ...people.filter((p) => !p.stale)], { maxZoom: 17 }) }}
             onCancel={async () => { if (!confirm('לבטל את נקודת המפגש?')) return; try { await api?.cancelMeeting(meeting.id); await refreshLive(); toast('נקודת המפגש בוטלה') } catch { toast('לא הצלחתי לבטל') } }} />
         )}
-        {eveningStory && (
-          <button className="mx-4 mb-3 flex w-[calc(100%-2rem)] items-center gap-3 rounded-3xl bg-gradient-to-l from-[#1768B0] to-[#D34838] p-4 text-start text-white shadow-card"
-            onClick={() => setStory({ day: today, ids: null })}>
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/20"><Sparkles size={22} /></span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-lg font-bold">הסיפור של היום מוכן</span>
-              <span className="tnum block text-[14px] opacity-90">{todayCount} רגעים מהיום · לצפייה</span>
-            </span>
-            <Play size={22} className="fill-white" />
-          </button>
+        {eveningStory && !storyDismissed && (
+          <SwipeAway onGone={() => { setStoryDismissed(true); try { localStorage.setItem(`garda-story-hidden-${today}`, '1') } catch { /* ignore */ } }}>
+            <button className="mx-4 mb-3 flex w-[calc(100%-2rem)] items-center gap-3 rounded-3xl bg-gradient-to-l from-[#1768B0] to-[#D34838] p-4 text-start text-white shadow-card"
+              onClick={() => setStory({ day: today, ids: null })}>
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/20"><Sparkles size={22} /></span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-lg font-bold">הסיפור של היום מוכן</span>
+                <span className="tnum block text-[14px] opacity-90">{todayCount} רגעים מהיום · לצפייה</span>
+              </span>
+              <Play size={22} className="fill-white" />
+            </button>
+          </SwipeAway>
         )}
         {polls.map((p) => <PollCard key={p.id} poll={p} />)}
         <NextCard list={list} t={t} />
