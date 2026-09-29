@@ -90,6 +90,7 @@ export function AlbumTab({ onOpen, onSlideshow, onAdd, onFeed }: {
         <button className="btn-primary text-lg" onClick={onAdd}><Camera size={20} /> הוסף</button>
         <button className="btn-ghost text-lg" onClick={onFeed}><Clapperboard size={20} /> גלילה</button>
       </div>
+      <p className="-mt-1 px-4 pb-2 text-center text-[13px] text-muted">טיפ: במסך מלא, החלקה ימינה פותחת את הגלילה</p>
 
       {/* סינון לפי מי צילם */}
       <div className="no-scrollbar flex gap-2 overflow-x-auto px-4 pb-2" style={{ touchAction: 'pan-x' }} role="radiogroup" aria-label="של מי">

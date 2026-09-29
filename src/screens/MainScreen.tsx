@@ -492,7 +492,7 @@ export function MainScreen() {
         </div>
       )}
 
-      <BottomSheet snap={snap} onSnap={setSnap} hidden={hidden}>
+      <BottomSheet snap={snap} onSnap={setSnap} hidden={hidden} onSwipeRight={live.photos.length ? () => setFeed({ startId: null }) : undefined}>
         <NowRow list={list} t={t} onPlace={focusPlace} />
         {phase === 'friday' && <FridayCard />}
         {meeting && (

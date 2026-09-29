@@ -94,7 +94,7 @@ export function Feed({ startId, onClose, onComments }: {
   const cur = items[active]
 
   return (
-    <div className="fixed inset-0 z-[69] bg-black text-white" role="dialog" aria-modal="true" aria-label="פיד תמונות וסרטונים">
+    <div className="feed-in fixed inset-0 z-[69] bg-black text-white" role="dialog" aria-modal="true" aria-label="פיד תמונות וסרטונים">
       <div ref={boxRef} className="no-scrollbar h-full snap-y snap-mandatory overflow-y-scroll overscroll-contain">
         {items.map((p, i) => {
           const near = Math.abs(i - active) <= 1

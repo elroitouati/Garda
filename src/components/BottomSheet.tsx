@@ -14,9 +14,9 @@ function safeInsets() {
   return r
 }
 
-type Props = { snap: Snap; onSnap: (s: Snap) => void; children: ReactNode; hidden?: boolean }
+type Props = { snap: Snap; onSnap: (s: Snap) => void; children: ReactNode; hidden?: boolean; onSwipeRight?: () => void }
 
-export function BottomSheet({ snap, onSnap, children, hidden = false }: Props) {
+export function BottomSheet({ snap, onSnap, children, hidden = false, onSwipeRight }: Props) {
   const sheetRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const [vh, setVh] = useState(() => window.innerHeight)
@@ -30,7 +30,7 @@ export function BottomSheet({ snap, onSnap, children, hidden = false }: Props) {
     return () => window.removeEventListener('resize', on)
   }, [])
 
-  const heights = [PEEK + insets.bottom, Math.round(vh * 0.52), vh - insets.top - 6]
+  const heights = [PEEK + insets.bottom, Math.round(vh * 0.52), vh] // מלא = עד קצה המסך
   const full = heights[2]
 
   const apply = useCallback((h: number) => {
@@ -45,9 +45,23 @@ export function BottomSheet({ snap, onSnap, children, hidden = false }: Props) {
   const g = useRef<{ id: number; y0: number; x0: number; h0: number; drag: boolean; handle: boolean; samples: [number, number][] } | null>(null)
   const suppressClick = useRef(false)
 
+  // במסך מלא: החלקה ימינה פותחת את הגלילה (חוץ מאזורים שנגללים הצידה)
+  const swipe = useRef<{ id: number; x0: number; y0: number } | null>(null)
+  const scrollsSideways = (el: HTMLElement | null) => {
+    for (; el && el !== sheetRef.current; el = el.parentElement) {
+      const ox = getComputedStyle(el).overflowX
+      if ((ox === 'auto' || ox === 'scroll') && el.scrollWidth > el.clientWidth + 2) return true
+      if (el.matches('input, textarea, select, [data-no-swipe]')) return true
+    }
+    return false
+  }
+
   const onDown = (e: React.PointerEvent) => {
     const handle = !!(e.target as HTMLElement).closest('[data-sheet-handle]')
-    if (snap === 2 && !handle) return // במסך מלא — גלילה בלבד, סוגרים דרך הקו
+    if (snap === 2 && !handle) {
+      swipe.current = onSwipeRight && !scrollsSideways(e.target as HTMLElement) ? { id: e.pointerId, x0: e.clientX, y0: e.clientY } : null
+      return // במסך מלא — גלילה בלבד, סוגרים דרך הקו
+    }
     if ((e.target as HTMLElement).closest('[data-no-drag]')) return
     g.current = { id: e.pointerId, y0: e.clientY, x0: e.clientX, h0: heights[snap], drag: false, handle, samples: [[e.timeStamp, e.clientY]] }
   }
@@ -69,6 +83,17 @@ export function BottomSheet({ snap, onSnap, children, hidden = false }: Props) {
     if (s.samples.length > 6) s.samples.shift()
   }
   const onUp = (e: React.PointerEvent) => {
+    const sw = swipe.current
+    swipe.current = null
+    if (sw && sw.id === e.pointerId) {
+      const dx = e.clientX - sw.x0, dy = e.clientY - sw.y0
+      if (dx > 70 && Math.abs(dx) > Math.abs(dy) * 1.6) {
+        suppressClick.current = true
+        setTimeout(() => (suppressClick.current = false), 50)
+        onSwipeRight?.()
+      }
+      return
+    }
     const s = g.current
     g.current = null
     if (!s || s.id !== e.pointerId) return
@@ -105,14 +130,14 @@ export function BottomSheet({ snap, onSnap, children, hidden = false }: Props) {
       onPointerDown={onDown}
       onPointerMove={onMove}
       onPointerUp={onUp}
-      onPointerCancel={() => { if (g.current?.drag) { setDragging(false); apply(heights[snap]) } g.current = null }}
+      onPointerCancel={() => { swipe.current = null; if (g.current?.drag) { setDragging(false); apply(heights[snap]) } g.current = null }}
       onClickCapture={(e) => { if (suppressClick.current) { e.stopPropagation(); e.preventDefault() } }}
     >
       <button
         type="button"
         data-sheet-handle
-        className="flex h-7 w-full shrink-0 items-center justify-center"
-        style={{ touchAction: 'none' }}
+        className="flex h-7 w-full shrink-0 items-center justify-center box-content"
+        style={{ touchAction: 'none', paddingTop: isFull ? insets.top : 0, transition: 'padding-top .3s' }}
         aria-label={['פתח את החלונית', 'הרחב למסך מלא', 'הקטן את החלונית'][snap]}
       >
         <span className="tricolor h-[5px] w-12 rounded-full" />
