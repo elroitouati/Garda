@@ -10,7 +10,7 @@ const STEP = 4500
 export function Slideshow({ photos, onClose }: { photos: Photo[]; onClose: () => void }) {
   const { data, photoUrl, signPhotos } = useStore()
   // מהישנה לחדשה, כמו סיפור של היום
-  const list = [...photos].sort((a, b) => a.taken_at.localeCompare(b.taken_at))
+  const list = photos.filter((p) => p.kind !== 'video').sort((a, b) => a.taken_at.localeCompare(b.taken_at))
   const [i, setI] = useState(0)
   const [playing, setPlaying] = useState(true)
   const [ready, setReady] = useState<Set<string>>(new Set())
@@ -42,6 +42,8 @@ export function Slideshow({ photos, onClose }: { photos: Photo[]; onClose: () =>
   const p = list[i]
   if (!p) return null
   const by = data?.members.find((m) => m.id === p.member_id)
+  useEffect(() => { if (!list.length) onClose() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  if (!list.length) return null
   return (
     <div className="fixed inset-0 z-[80] overflow-hidden bg-black" role="dialog" aria-modal="true" aria-label="מצגת" onClick={() => setPlaying((x) => !x)}>
       {list.map((ph, k) => {

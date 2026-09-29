@@ -51,18 +51,24 @@ Deno.serve(async (req) => {
   } else if (kind === 'photos') {
     // תמונות שעלו ולא דווחו; מחכים דקה וחצי שהעלאה של כמה תמונות תסתיים
     const cutoff = new Date(Date.now() - 90_000).toISOString()
-    const { data: fresh = [] } = await sb.from('photos').select('id,member_id').eq('notified', false).lt('created_at', cutoff)
-    const rows = fresh as { id: string; member_id: string }[]
+    const { data: fresh = [] } = await sb.from('photos').select('id,member_id,kind').eq('notified', false).lt('created_at', cutoff)
+    const rows = fresh as { id: string; member_id: string; kind: string }[]
     if (!rows.length) return new Response('no new photos')
     await sb.from('photos').update({ notified: true }).in('id', rows.map((r) => r.id))
-    const byMember = new Map<string, number>()
-    for (const r of rows) byMember.set(r.member_id, (byMember.get(r.member_id) ?? 0) + 1)
+    const byMember = new Map<string, { p: number; v: number }>()
+    for (const r of rows) {
+      const c = byMember.get(r.member_id) ?? { p: 0, v: 0 }
+      if (r.kind === 'video') c.v++; else c.p++
+      byMember.set(r.member_id, c)
+    }
+    const count = (n: number, one: string, many: string) => (n === 1 ? one : `${n} ${many}`)
     let total = 0
-    for (const [uploader, n] of byMember) {
+    for (const [uploader, { p, v }] of byMember) {
       const recipients = people.filter((x) => x.id !== uploader).map((x) => x.id)
+      const what = [p && count(p, 'תמונה חדשה', 'תמונות חדשות'), v && count(v, 'סרטון חדש', 'סרטונים חדשים')].filter(Boolean).join(' ו')
       total += await sendTo(recipients, {
-        title: 'תמונות חדשות באלבום',
-        body: n === 1 ? `תמונה חדשה מ${name(uploader)}` : `${n} תמונות חדשות מ${name(uploader)}`,
+        title: v ? 'חדש באלבום' : 'תמונות חדשות באלבום',
+        body: `${what} מ${name(uploader)}`,
         tag: `photos-${uploader}`, important: false, url: APP_URL,
       })
     }

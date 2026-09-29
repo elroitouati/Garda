@@ -2,11 +2,12 @@ import imageCompression from 'browser-image-compression'
 import exifr from 'exifr'
 import type { Timed } from './schedule'
 import type { Photo, Place } from './types'
+import { prepareVideoFile } from './video'
 
 export type Prepared = {
   full: Blob
   thumb: Blob
-  meta: Pick<Photo, 'lat' | 'lng' | 'loc_source' | 'taken_at' | 'width' | 'height'>
+  meta: Pick<Photo, 'lat' | 'lng' | 'loc_source' | 'taken_at' | 'width' | 'height'> & Partial<Pick<Photo, 'kind' | 'duration'>>
 }
 
 function currentPosition(): Promise<{ lat: number; lng: number } | null> {
@@ -28,6 +29,25 @@ function fromSchedule(t: Date, list: Timed[], hotel: Place | undefined) {
     ?? [...withPlace].reverse().find((a) => a.start <= t && t.getTime() - a.end.getTime() < 6 * 3600_000)
   const p = (during ?? before)?.place ?? hotel
   return p ? { lat: p.lat, lng: p.lng } : null
+}
+
+/** מיקום לסרטון: GPS רק כשצולם עכשיו והשיתוף פעיל, אחרת לפי הלו"ז */
+async function placeVideo(taken: Date, source: 'camera' | 'gallery', list: Timed[], hotel: Place | undefined, allowGps: boolean) {
+  if (source === 'camera' && allowGps) {
+    const pos = await currentPosition()
+    if (pos) return { lat: pos.lat, lng: pos.lng, loc_source: 'device' as const }
+  }
+  const p = fromSchedule(taken, list, hotel)
+  return { lat: p?.lat ?? 45.5362, lng: p?.lng ?? 10.5357, loc_source: 'schedule' as const }
+}
+
+export async function prepareVideo(file: File, source: 'camera' | 'gallery', list: Timed[], hotel: Place | undefined, allowGps: boolean, onProgress: (p: number) => void): Promise<Prepared> {
+  const taken = source === 'camera' ? new Date() : new Date(file.lastModified || Date.now())
+  const [v, place] = await Promise.all([prepareVideoFile(file, onProgress), placeVideo(taken, source, list, hotel, allowGps)])
+  return {
+    full: v.full, thumb: v.thumb,
+    meta: { ...place, taken_at: taken.toISOString(), width: v.width, height: v.height, kind: 'video', duration: Math.round(v.duration * 10) / 10 },
+  }
 }
 
 /** allowGps: רק כששיתוף המיקום שלי פעיל משתמשים ב-GPS; אחרת התמונה ממוקמת לפי הלו"ז */
@@ -65,13 +85,13 @@ export async function preparePhoto(file: File, source: 'camera' | 'gallery', lis
 // אתר לא יכול לכתוב לגלריה של האייפון. פותחים את חלון השיתוף, ומשם "שמור תמונה".
 const files = new Map<string, File>()
 
-const fileName = (p: Photo) => `garda-${p.taken_at.slice(0, 10)}-${p.id.slice(0, 6)}.jpg`
+const fileName = (p: Photo) => `garda-${p.taken_at.slice(0, 10)}-${p.id.slice(0, 6)}.${p.kind === 'video' ? p.path.split('.').pop() : 'jpg'}`
 
 export async function fetchPhotoFile(p: Photo, url: string): Promise<File> {
   const hit = files.get(p.id)
   if (hit) return hit
   const blob = await (await fetch(url)).blob()
-  const f = new File([blob], fileName(p), { type: 'image/jpeg' })
+  const f = new File([blob], fileName(p), { type: p.kind === 'video' ? blob.type || 'video/mp4' : 'image/jpeg' })
   files.set(p.id, f)
   return f
 }

@@ -158,10 +158,10 @@ export function demoApi(): Api {
     async uploadPhoto(memberId, full, thumb, meta) {
       if (!navigator.onLine) throw new Error('offline')
       const pid = id()
-      const path = `${memberId}/${pid}.jpg`, thumb_path = `${memberId}/${pid}_t.jpg`
+      const path = `${memberId}/${pid}.${meta.kind === 'video' ? 'mp4' : 'jpg'}`, thumb_path = `${memberId}/${pid}_t.jpg`
       avatars[path] = URL.createObjectURL(full)
       avatars[thumb_path] = URL.createObjectURL(thumb)
-      live.photos.unshift({ id: pid, member_id: memberId, path, thumb_path, ...meta, created_at: new Date().toISOString() })
+      live.photos.unshift({ id: pid, member_id: memberId, path, thumb_path, kind: 'photo', duration: null, ...meta, created_at: new Date().toISOString() })
       emitLive()
     },
     async movePhoto(pid, lat, lng) {

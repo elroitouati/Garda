@@ -1,12 +1,18 @@
-import { Camera, Download, Heart, Images, Play, Sparkles } from 'lucide-react'
+import { Camera, Clapperboard, Download, Heart, Images, Play, Sparkles } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
 import { useToast } from './Toast'
 import { useStore } from '../lib/store'
 import { romeDate, shortDate, weekdayLetter } from '../lib/time'
 import type { Photo } from '../lib/types'
+import { formatDuration } from '../lib/video'
 import { Avatar } from './Avatar'
 
 export const photoDay = (p: Photo) => romeDate(new Date(p.taken_at))
+
+function countLabel(list: Photo[]) {
+  const v = list.filter((p) => p.kind === 'video').length, ph = list.length - v
+  return [ph && (ph === 1 ? 'תמונה' : `${ph} תמונות`), v && (v === 1 ? 'סרטון' : `${v} סרטונים`)].filter(Boolean).join(' · ')
+}
 
 /** הרגע של היום: התמונה עם הכי הרבה לבבות (לפחות 2) */
 export function topPhoto(list: Photo[], likes: Map<string, number>) {
@@ -24,10 +30,11 @@ export function useLikeCounts() {
   }, [live.likes])
 }
 
-export function AlbumTab({ onOpen, onSlideshow, onAdd }: {
+export function AlbumTab({ onOpen, onSlideshow, onAdd, onFeed }: {
   onOpen: (ids: string[], start: number) => void
   onSlideshow: (ids: string[]) => void
   onAdd: () => void
+  onFeed: () => void
 }) {
   const { live, data, photoUrl, api, me, refreshLive } = useStore()
   const toast = useToast()
@@ -70,7 +77,7 @@ export function AlbumTab({ onOpen, onSlideshow, onAdd }: {
     return (
       <div className="mx-4 mt-2 flex flex-col items-center gap-3 rounded-3xl bg-surface2 p-6 text-center">
         <Images size={28} className="text-muted" />
-        <p className="text-muted">עוד אין תמונות. כל תמונה שתעלו תופיע כאן ועל המפה, במקום שבו צולמה.</p>
+        <p className="text-muted">עוד אין תמונות. כל תמונה או סרטון שתעלו יופיעו כאן ועל המפה, במקום שבו צולמו.</p>
         <button className="btn-primary" onClick={onAdd}><Camera size={18} /> תמונה ראשונה</button>
       </div>
     )
@@ -79,8 +86,9 @@ export function AlbumTab({ onOpen, onSlideshow, onAdd }: {
   const ids = (list: Photo[]) => list.map((p) => p.id)
   return (
     <div className="pt-1">
-      <div className="px-4 pb-3">
-        <button className="btn-primary w-full text-lg" onClick={onAdd}><Camera size={20} /> הוסף תמונות</button>
+      <div className="grid grid-cols-2 gap-2 px-4 pb-3">
+        <button className="btn-primary text-lg" onClick={onAdd}><Camera size={20} /> הוסף</button>
+        <button className="btn-ghost text-lg" onClick={onFeed}><Clapperboard size={20} /> גלילה</button>
       </div>
 
       {/* סינון לפי מי צילם */}
@@ -106,7 +114,7 @@ export function AlbumTab({ onOpen, onSlideshow, onAdd }: {
             <div className="flex items-center gap-2 px-4">
               <h3 className="min-w-0 flex-1 truncate text-[18px] leading-tight">
                 <bdi className="tnum">{weekdayLetter(day)} {shortDate(day)}</bdi>{dayTitle ? <> · <bdi>{dayTitle}</bdi></> : null}
-                <span className="tnum ms-2 font-sans text-[14px] font-normal text-muted">{list.length} תמונות</span>
+                <span className="tnum ms-2 font-sans text-[14px] font-normal text-muted">{countLabel(list)}</span>
               </h3>
               <button className="grid h-10 w-10 place-items-center rounded-full bg-surface2 text-green" onClick={() => onSlideshow(ids(list))} aria-label="מצגת של היום"><Play size={18} /></button>
               <button className="grid h-10 w-10 place-items-center rounded-full bg-surface2" onClick={() => onOpen(ids(list), 0)} aria-label="שמור את כל היום"><Download size={18} /></button>
@@ -131,6 +139,11 @@ export function AlbumTab({ onOpen, onSlideshow, onAdd }: {
                   <button key={ph.id} className="relative aspect-square overflow-hidden rounded-lg bg-surface2" style={{ touchAction: 'manipulation' }}
                     onClick={() => onTap(ph.id, () => onOpen(ids(list), k))} aria-label={`תמונה של ${by?.name ?? ''}`}>
                     {u && <img src={u} alt="" className="h-full w-full object-cover" loading="lazy" />}
+                    {ph.kind === 'video' && (
+                      <span className="tnum absolute top-1 end-1 flex items-center gap-0.5 rounded-full bg-black/50 px-1.5 py-0.5 text-[11px] font-bold text-white">
+                        <Play size={10} className="fill-white" />{formatDuration(ph.duration)}
+                      </span>
+                    )}
                     {pop?.id === ph.id && <Heart key={pop.n} size={54} className="heart-pop pointer-events-none absolute inset-0 m-auto fill-white text-white drop-shadow-lg" />}
                     {(l > 0 || c > 0) && (
                       <span className="tnum absolute bottom-1 start-1 flex items-center gap-1 rounded-full bg-black/45 px-1.5 py-0.5 text-[11px] font-bold text-white">

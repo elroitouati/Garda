@@ -1,8 +1,9 @@
-import { Camera, Check, ImagePlus, LocateFixed, MapPin, MessageCircle, Minus, Navigation, Plus, Shield, Umbrella, WifiOff, X } from 'lucide-react'
+import { Camera, Check, ImagePlus, LocateFixed, MapPin, MessageCircle, Minus, Navigation, Plus, Shield, Umbrella, Video, WifiOff, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Avatar } from '../components/Avatar'
 import { BottomSheet, type Snap } from '../components/BottomSheet'
 import { AlbumTab } from '../components/Album'
+import { Feed } from '../components/Feed'
 import { Gallery } from '../components/Gallery'
 import { Slideshow } from '../components/Slideshow'
 import { Welcome } from '../components/Welcome'
@@ -21,7 +22,8 @@ import { syncPush } from '../lib/push'
 import { shabbatPhase } from '../lib/shabbat'
 import { TIPS } from '../lib/tips'
 import { googleLink, wazeLink } from '../lib/nav'
-import { preparePhoto } from '../lib/photos'
+import { preparePhoto, prepareVideo } from '../lib/photos'
+import { isVideoFile, unlockMedia, VideoError } from '../lib/video'
 import { enqueue, flush, pendingCount } from '../lib/uploadQueue'
 import { myActivities, useNow } from '../lib/schedule'
 import { useStore } from '../lib/store'
@@ -84,9 +86,10 @@ export function MainScreen() {
   const [tab, setTab] = useState<'day' | 'family' | 'album' | 'info'>('day')
   const [compose, setCompose] = useState(false)
   const [cameraMenu, setCameraMenu] = useState(false)
-  const [gallery, setGallery] = useState<{ ids: string[] | null; start: number } | null>(null)
+  const [gallery, setGallery] = useState<{ ids: string[] | null; start: number; comments?: boolean } | null>(null)
+  const [feed, setFeed] = useState<{ startId: string | null } | null>(null)
   const [placing, setPlacing] = useState<Photo | null>(null)
-  const [uploads, setUploads] = useState<{ done: number; total: number; failed: number } | null>(null)
+  const [uploads, setUploads] = useState<{ done: number; total: number; failed: number; note?: string } | null>(null)
   const [filter, setFilter] = useState<'all' | 'mine'>('all')
   const [meetDraft, setMeetDraft] = useState(false)
   const [locHelpHidden, setLocHelpHidden] = useState(false)
@@ -96,6 +99,7 @@ export function MainScreen() {
   const loc = useLocationSharing(phase === 'shabbat')
   const camRef = useRef<HTMLInputElement>(null)
   const galRef = useRef<HTMLInputElement>(null)
+  const vidRef = useRef<HTMLInputElement>(null)
 
   // צליל להודעות: iOS מאפשר רק אחרי נגיעה ראשונה
   useEffect(() => {
@@ -117,29 +121,43 @@ export function MainScreen() {
     if (!files?.length || !api || !me || !data) return
     setCameraMenu(false)
     const arr = [...files]
-    let done = 0, failed = 0, queued = 0, bySchedule = 0
+    let done = 0, failed = 0, queued = 0, bySchedule = 0, videos = 0
+    let videoErr: VideoError['code'] | null = null
     setUploads({ done, total: arr.length, failed })
     const hotel = data.places.find((p) => p.kind === 'hotel')
+    const allowGps = loc.sharing && phase !== 'shabbat'
     for (const f of arr) {
       let prep: Awaited<ReturnType<typeof preparePhoto>> | null = null
+      const video = isVideoFile(f)
       try {
-        prep = await preparePhoto(f, source, list, hotel, loc.sharing && phase !== 'shabbat')
+        if (video) {
+          const n = done + failed + queued + 1
+          prep = await prepareVideo(f, source, list, hotel, allowGps, (p) =>
+            setUploads({ done: done + queued, total: arr.length, failed, note: `מכין סרטון ${n}/${arr.length} · ${Math.round(p * 100)}%` }))
+          setUploads({ done: done + queued, total: arr.length, failed, note: `מעלה סרטון ${n}/${arr.length}…` })
+        } else prep = await preparePhoto(f, source, list, hotel, allowGps)
         await api.uploadPhoto(me.id, prep.full, prep.thumb, prep.meta)
         if (prep.meta.loc_source === 'schedule') bySchedule++
+        if (video) videos++
         done++
       } catch (e) {
         console.error(e)
+        if (e instanceof VideoError) { videoErr = e.code; failed++ }
         // אין קליטה: שומרים בטלפון ומעלים לבד כשהקליטה חוזרת
-        if (prep) { try { await enqueue(me.id, prep); queued++ } catch { failed++ } } else failed++
+        else if (prep) { try { await enqueue(me.id, prep); queued++ } catch { failed++ } } else failed++
       }
       setUploads({ done: done + queued, total: arr.length, failed })
     }
     await refreshLive()
     setPending(await pendingCount())
     setTimeout(() => setUploads(null), 1500)
-    if (queued) toast(queued === 1 ? 'אין קליטה. התמונה תעלה לבד כשהקליטה תחזור' : `אין קליטה. ${queued} התמונות יעלו לבד כשהקליטה תחזור`)
-    else if (failed) toast(`${failed} תמונות לא עלו. נסה שוב.`)
-    else toast(done === 1 ? 'התמונה עלתה לאלבום' : `${done} תמונות עלו לאלבום`)
+    const item = videos === arr.length ? 'סרטון' : 'תמונה'
+    if (videoErr === 'too_long') toast(`סרטון יכול להיות עד דקה. אפשר לקצר אותו בגלריה של הטלפון ולנסות שוב.`)
+    else if (videoErr === 'too_big') toast('הסרטון גדול מדי. נסה סרטון קצר יותר.')
+    else if (videoErr) toast('לא הצלחתי לקרוא את הסרטון. נסה שוב.')
+    else if (queued) toast(queued === 1 ? `אין קליטה. ה${item} תעלה לבד כשהקליטה תחזור` : `אין קליטה. ${queued} קבצים יעלו לבד כשהקליטה תחזור`)
+    else if (failed) toast(`${failed} לא עלו. נסה שוב.`)
+    else toast(done === 1 ? (videos ? 'הסרטון עלה לאלבום' : 'התמונה עלתה לאלבום') : `${done} ${videos === done ? 'סרטונים' : videos ? 'קבצים' : 'תמונות'} עלו לאלבום`)
     if (bySchedule && !failed && !queued) setTimeout(() => toast('מיקום לפי הלו"ז. אפשר לתקן בגלריה'), 2400)
   }
 
@@ -426,7 +444,7 @@ export function MainScreen() {
       {uploads && (
         <div className="absolute inset-x-0 z-30 flex justify-center" style={{ top: 'calc(var(--safe-top) + 64px)' }}>
           <span className="tnum flex items-center gap-2 rounded-full bg-ink/90 px-4 py-2 text-[14px] font-semibold text-bg">
-            {uploads.done + uploads.failed < uploads.total ? <>מעלה {uploads.done + uploads.failed + 1} מתוך {uploads.total}…</> : <><Check size={16} className="text-[#7BD389]" /> הועלו {uploads.done}</>}
+            {uploads.note ? <>{uploads.note}</> : uploads.done + uploads.failed < uploads.total ? <>מעלה {uploads.done + uploads.failed + 1} מתוך {uploads.total}…</> : <><Check size={16} className="text-[#7BD389]" /> הועלו {uploads.done}</>}
           </span>
         </div>
       )}
@@ -545,7 +563,7 @@ export function MainScreen() {
           )}
 
           {tab === 'album' && (
-            <AlbumTab onOpen={(ids, st) => setGallery({ ids, start: st })} onSlideshow={(ids) => setSlideshow(ids)} onAdd={() => setCameraMenu(true)} />
+            <AlbumTab onOpen={(ids, st) => setGallery({ ids, start: st })} onSlideshow={(ids) => setSlideshow(ids)} onAdd={() => setCameraMenu(true)} onFeed={() => setFeed({ startId: null })} />
           )}
 
           {tab === 'info' && (
@@ -585,19 +603,24 @@ export function MainScreen() {
       {cameraMenu && (
         <div className="fixed inset-0 z-[75] flex items-end bg-black/40" onClick={() => setCameraMenu(false)}>
           <div className="w-full rounded-t-[28px] bg-surface p-5 pb-[calc(20px+var(--safe-bottom))] animate-rise" onClick={(e) => e.stopPropagation()}>
-            <h2 className="mb-1 text-xl">תמונה לאלבום המשפחתי</h2>
-            <p className="mb-4 text-muted">התמונה תופיע לכולם על המפה, במקום שבו צולמה.</p>
-            <button className="btn-primary mb-2 w-full text-lg" onClick={() => camRef.current?.click()}><Camera size={20} /> צלם עכשיו</button>
-            <button className="btn-ghost w-full" onClick={() => galRef.current?.click()}><ImagePlus size={20} /> בחר מהגלריה</button>
+            <h2 className="mb-1 text-xl">לאלבום המשפחתי</h2>
+            <p className="mb-4 text-muted">תמונות וסרטונים יופיעו לכולם באלבום ועל המפה. סרטון עד דקה.</p>
+            <div className="mb-2 grid grid-cols-2 gap-2">
+              <button className="btn-primary text-lg" onClick={() => camRef.current?.click()}><Camera size={20} /> תמונה</button>
+              <button className="btn-primary text-lg" onClick={() => { unlockMedia(); vidRef.current?.click() }}><Video size={20} /> סרטון</button>
+            </div>
+            <button className="btn-ghost w-full" onClick={() => { unlockMedia(); galRef.current?.click() }}><ImagePlus size={20} /> בחר מהגלריה</button>
           </div>
         </div>
       )}
       <input ref={camRef} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { void upload(e.target.files, 'camera'); e.target.value = '' }} />
-      <input ref={galRef} type="file" accept="image/*" multiple hidden onChange={(e) => { void upload(e.target.files, 'gallery'); e.target.value = '' }} />
+      <input ref={vidRef} type="file" accept="video/*" capture="environment" hidden onChange={(e) => { void upload(e.target.files, 'camera'); e.target.value = '' }} />
+      <input ref={galRef} type="file" accept="image/*,video/*" multiple hidden onChange={(e) => { void upload(e.target.files, 'gallery'); e.target.value = '' }} />
       {gallery && galleryPhotos.length > 0 && (
-        <Gallery photos={galleryPhotos} start={gallery.start} onClose={() => setGallery(null)}
+        <Gallery photos={galleryPhotos} start={gallery.start} startComments={gallery.comments} onClose={() => setGallery(null)}
           onPlace={(p) => { setGallery(null); setSelectedPlace(null); setSnap(0); setPlacing(p); mapRef.current?.flyTo(p, 15) }} />
       )}
+      {feed && <Feed startId={feed.startId} onClose={() => setFeed(null)} onComments={(p) => setGallery({ ids: [p.id], start: 0, comments: true })} />}
       {slideshow && <Slideshow photos={photos.filter((p) => slideshow.includes(p.id))} onClose={() => setSlideshow(null)} />}
       {overlay === 'settings' && <Settings onClose={() => setOverlay(null)} />}
       {overlay === 'emergency' && <EmergencyCard onClose={() => setOverlay(null)} />}

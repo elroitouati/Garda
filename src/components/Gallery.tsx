@@ -1,4 +1,4 @@
-import { Check, Download, Heart, LocateFixed, MapPin, MessageCircle, Send, Trash2, X } from 'lucide-react'
+import { Check, Download, Heart, LocateFixed, MapPin, MessageCircle, Play, Send, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { cachedFile, fetchPhotoFile, saveFiles } from '../lib/photos'
 import { useStore } from '../lib/store'
@@ -9,8 +9,8 @@ import { useToast } from './Toast'
 const CHUNK = 20
 const when = (iso: string) => new Date(iso).toLocaleString('he-IL', { timeZone: 'Europe/Rome', weekday: 'short', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })
 
-export function Gallery({ photos, start, onClose, onPlace }: {
-  photos: Photo[]; start: number; onClose: () => void; onPlace: (p: Photo) => void
+export function Gallery({ photos, start, onClose, onPlace, startComments = false }: {
+  photos: Photo[]; start: number; onClose: () => void; onPlace: (p: Photo) => void; startComments?: boolean
 }) {
   const { data, me, api, photoUrl, signPhotos, refreshLive, live } = useStore()
   const toast = useToast()
@@ -23,7 +23,7 @@ export function Gallery({ photos, start, onClose, onPlace }: {
   const drag = useRef<{ x: number; id: number } | null>(null)
   const lastTap = useRef(0)
   const [burst, setBurst] = useState(0)
-  const [showComments, setShowComments] = useState(false)
+  const [showComments, setShowComments] = useState(startComments)
   const [draft, setDraft] = useState('')
   const stripRef = useRef<HTMLDivElement>(null)
   const p = photos[i]
@@ -37,6 +37,7 @@ export function Gallery({ photos, start, onClose, onPlace }: {
     const near = [photos[i - 1], p, photos[i + 1]].filter(Boolean) as Photo[]
     signPhotos(near.map((x) => x.path))
     for (const x of near) {
+      if (x.kind === 'video') continue // סרטון מורידים רק כשלוחצים "שמור"
       const u = photoUrl(x.path)
       if (u && !cachedFile(x)) void fetchPhotoFile(x, u).then(() => bump((n) => n + 1)).catch(() => {})
     }
@@ -67,11 +68,19 @@ export function Gallery({ photos, start, onClose, onPlace }: {
 
   const saveOne = async () => {
     try {
+      if (p.kind === 'video' && !cachedFile(p)) {
+        // סרטון יורד רק עכשיו; אחרי ההורדה צריך לחיצה נוספת כדי שהטלפון יאפשר לשתף
+        if (!full) return
+        toast('מוריד את הסרטון…')
+        await fetchPhotoFile(p, full)
+        toast('מוכן. לחץ שוב על "שמור לגלריה"')
+        return
+      }
       const f = cachedFile(p) ?? (full ? await fetchPhotoFile(p, full) : null)
-      if (!f) { toast('התמונה עוד נטענת. נסה שוב בעוד רגע.'); return }
+      if (!f) { toast('עוד נטען. נסה שוב בעוד רגע.'); return }
       const r = await saveFiles([f])
       if (r === 'shared') toast('נשמר')
-      else if (r === 'downloaded') toast('התמונה הורדה')
+      else if (r === 'downloaded') toast('הורד')
     } catch { toast('השמירה נכשלה. נסה שוב.') }
   }
 
@@ -132,14 +141,25 @@ export function Gallery({ photos, start, onClose, onPlace }: {
         }}
         onPointerCancel={() => { setDx(0); drag.current = null }}
       >
-        <img
-          key={p.id}
-          src={full ?? thumb ?? undefined}
-          alt={`תמונה של ${author?.name ?? ''}`}
-          className="absolute inset-0 m-auto h-full w-full select-none object-contain"
-          style={{ transform: `translateX(${dx}px)`, transition: dx ? 'none' : 'transform .25s' }}
-          draggable={false}
-        />
+        {p.kind === 'video' ? (
+          <video
+            key={p.id}
+            src={full ?? undefined}
+            poster={thumb ?? undefined}
+            controls playsInline autoPlay
+            className="absolute inset-0 m-auto h-full w-full object-contain"
+            style={{ transform: `translateX(${dx}px)`, transition: dx ? 'none' : 'transform .25s' }}
+          />
+        ) : (
+          <img
+            key={p.id}
+            src={full ?? thumb ?? undefined}
+            alt={`תמונה של ${author?.name ?? ''}`}
+            className="absolute inset-0 m-auto h-full w-full select-none object-contain"
+            style={{ transform: `translateX(${dx}px)`, transition: dx ? 'none' : 'transform .25s' }}
+            draggable={false}
+          />
+        )}
         {!full && !thumb && <div className="absolute inset-0 grid place-items-center text-white/60">טוען…</div>}
         {burst > 0 && <Heart key={burst} size={110} className="heart-pop pointer-events-none absolute inset-0 m-auto fill-white text-white drop-shadow-lg" />}
       </div>
@@ -170,8 +190,9 @@ export function Gallery({ photos, start, onClose, onPlace }: {
           const u = photoUrl(x.thumb_path)
           return (
             <button key={x.id} data-i={k} onClick={() => setI(k)} aria-label={`תמונה ${k + 1}`}
-              className={`h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-white/10 ${k === i ? 'ring-2 ring-white' : 'opacity-60'}`}>
+              className={`relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-white/10 ${k === i ? 'ring-2 ring-white' : 'opacity-60'}`}>
               {u && <img src={u} alt="" className="h-full w-full object-cover" />}
+              {x.kind === 'video' && <Play size={16} className="pointer-events-none absolute inset-0 m-auto fill-white text-white drop-shadow" />}
             </button>
           )
         })}
@@ -192,7 +213,7 @@ export function Gallery({ photos, start, onClose, onPlace }: {
               {p.loc_source === 'schedule' ? <><LocateFixed size={18} /> מקם על המפה</> : <><MapPin size={18} /> שנה מיקום</>}
             </button>
             <button className="btn bg-white/10 text-[#FF9C8A]" onClick={async () => {
-              if (!confirm('למחוק את התמונה לכולם?')) return
+              if (!confirm(p.kind === 'video' ? 'למחוק את הסרטון לכולם?' : 'למחוק את התמונה לכולם?')) return
               try { await api?.deletePhoto(p); await refreshLive(); toast('נמחקה'); if (i >= photos.length - 1) go(-1) } catch { toast('המחיקה נכשלה') }
             }}><Trash2 size={18} /> מחק</button>
           </>

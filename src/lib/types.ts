@@ -117,6 +117,8 @@ export type Photo = {
   taken_at: string
   width: number | null
   height: number | null
+  kind: 'photo' | 'video'
+  duration: number | null // שניות, לסרטון
   created_at: string
 }
 

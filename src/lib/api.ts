@@ -1,5 +1,7 @@
 import { supabase } from './supabase'
+import type { Prepared } from './photos'
 import type { LiveData, Location, Meeting, Message, Photo, TripData } from './types'
+import { videoExt } from './video'
 
 export type PickMember = { id: string; name: string; color: string; initials: string | null; household?: string | null }
 export type RpcResult = { ok?: boolean; error?: string; members?: PickMember[] }
@@ -25,7 +27,7 @@ export interface Api {
   sendMessage(m: Omit<Message, 'id' | 'created_at' | 'reminded_at'>): Promise<void>
   markRead(messageId: string, memberId: string): Promise<void>
   remind(messageId: string): Promise<void>
-  uploadPhoto(memberId: string, full: Blob, thumb: Blob, meta: Pick<Photo, 'lat' | 'lng' | 'loc_source' | 'taken_at' | 'width' | 'height'>): Promise<void>
+  uploadPhoto(memberId: string, full: Blob, thumb: Blob, meta: Prepared['meta']): Promise<void>
   movePhoto(id: string, lat: number, lng: number): Promise<void>
   deletePhoto(p: Photo): Promise<void>
   subscribeLive(onChange: () => void): () => void
@@ -153,10 +155,11 @@ const realApi = (): Api => {
     },
     async uploadPhoto(memberId, full, thumb, meta) {
       const id = crypto.randomUUID()
-      const path = `${memberId}/${id}.jpg`
+      const video = meta.kind === 'video'
+      const path = `${memberId}/${id}.${video ? videoExt(full.type) : 'jpg'}`
       const thumb_path = `${memberId}/${id}_t.jpg`
       const opts = { contentType: 'image/jpeg', cacheControl: '31536000' }
-      must(await sb.storage.from('photos').upload(path, full, opts))
+      must(await sb.storage.from('photos').upload(path, full, video ? { ...opts, contentType: full.type || 'video/mp4' } : opts))
       must(await sb.storage.from('photos').upload(thumb_path, thumb, opts))
       must(await sb.from('photos').insert({ id, member_id: memberId, path, thumb_path, ...meta }))
     },

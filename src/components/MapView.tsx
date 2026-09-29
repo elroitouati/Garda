@@ -183,6 +183,7 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ places, h
       const src = url?.(group[0].thumb_path)
       if (src) { const img = document.createElement('img'); img.src = src; img.alt = ''; div.appendChild(img) }
       if (group.length > 1) { const b = document.createElement('span'); b.className = 'photo-count tnum'; b.textContent = String(group.length); div.appendChild(b) }
+      else if (group[0].kind === 'video') { const b = document.createElement('span'); b.className = 'photo-count'; b.textContent = '▶'; div.appendChild(b) }
       div.addEventListener('click', (ev) => { ev.stopPropagation(); cb?.(group.map((x) => x.id)) })
       root.appendChild(div)
       photoMarkers.current.push(new maplibregl.Marker({ element: root }).setLngLat([lng, lat]).addTo(m))
