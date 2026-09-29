@@ -25,7 +25,9 @@ export function Feed({ startId, onClose, onComments }: {
     setOnlyVideos(v); setActive(0)
     boxRef.current?.scrollTo({ top: 0 })
   }
-  const [muted, setMuted] = useState(true)
+  const [muted, setMuted] = useState(false) // קול פועל כברירת מחדל
+  const [blocked, setBlocked] = useState(false) // הדפדפן לא נתן לנגן עם קול עד שנוגעים במסך
+  const unlockedEls = useRef(new WeakSet<HTMLVideoElement>())
   const [pop, setPop] = useState<{ id: string; n: number } | null>(null)
   const boxRef = useRef<HTMLDivElement>(null)
   const videos = useRef(new Map<string, HTMLVideoElement>())
@@ -75,8 +77,17 @@ export function Feed({ startId, onClose, onComments }: {
   // רק הסרטון שעל המסך מתנגן
   useEffect(() => {
     videos.current.forEach((v, id) => {
-      if (id === items[active]?.id) { v.muted = muted; v.play().catch(() => { v.muted = true; setMuted(true); v.play().catch(() => {}) }) }
-      else v.pause()
+      if (id === items[active]?.id) {
+        v.muted = muted
+        if (!v.src) return // הקובץ עוד לא מוכן
+        v.play().then(() => setBlocked(false)).catch((e: DOMException) => {
+          // בלי נגיעה במסך הטלפון לא מנגן עם קול: מנגנים בשקט עד הנגיעה הראשונה
+          if (muted || e?.name !== 'NotAllowedError') return
+          v.muted = true
+          setBlocked(true)
+          v.play().catch(() => {})
+        })
+      } else v.pause()
     })
   }, [active, muted, items, photoUrl(items[active]?.path ?? '')]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -87,6 +98,20 @@ export function Feed({ startId, onClose, onComments }: {
       ?.request('screen').then((l) => { lock = l }).catch(() => {})
     return () => { void lock?.release().catch(() => {}) }
   }, [])
+
+  // נגיעה במסך "משחררת" את כל הסרטונים לנגינה עם קול (באייפון זה נדרש לכל סרטון)
+  const unlockAll = () => {
+    const cur = items[active]
+    videos.current.forEach((v, id) => {
+      if (id === cur?.id) {
+        if (blocked && !muted) { v.muted = false; v.play().then(() => setBlocked(false)).catch(() => {}) }
+        return
+      }
+      if (unlockedEls.current.has(v)) return
+      unlockedEls.current.add(v)
+      v.play().then(() => v.pause()).catch(() => {})
+    })
+  }
 
   const like = async (p: Photo, on: boolean) => {
     if (!api || !me) return
@@ -100,7 +125,12 @@ export function Feed({ startId, onClose, onComments }: {
       return
     }
     if (tap.current) clearTimeout(tap.current.timer)
-    tap.current = { id: p.id, timer: window.setTimeout(() => { tap.current = null; if (p.kind === 'video') setMuted((m) => !m) }, 260) }
+    tap.current = { id: p.id, timer: window.setTimeout(() => {
+      tap.current = null
+      if (p.kind !== 'video') return
+      if (blocked) setBlocked(false) // הנגיעה כבר הפעילה את הקול
+      else setMuted((m) => !m)
+    }, 260) }
   }
 
   const cur = items[active]
@@ -126,7 +156,8 @@ export function Feed({ startId, onClose, onComments }: {
         if (!s || s.id !== e.pointerId || !s.on) return
         if (e.clientX - s.x0 < -80) close(); else setDx(0)
       }}
-      onPointerCancel={() => { sw.current = null; setDx(0) }}>
+      onPointerCancel={() => { sw.current = null; setDx(0) }}
+      onTouchEnd={unlockAll} onClickCapture={unlockAll}>
       <div ref={boxRef} className="no-scrollbar h-full snap-y snap-mandatory overflow-y-scroll overscroll-contain">
         {items.map((p, i) => {
           const near = Math.abs(i - active) <= 1
@@ -202,6 +233,11 @@ export function Feed({ startId, onClose, onComments }: {
           </button>
         ) : <span className="w-11" />}
       </header>
+      {blocked && cur?.kind === 'video' && (
+        <div className="pointer-events-none absolute inset-x-0 top-[calc(var(--safe-top)+64px)] flex justify-center">
+          <span className="flex items-center gap-1.5 rounded-full bg-black/55 px-3 py-1.5 text-[14px] font-semibold backdrop-blur-sm"><VolumeX size={16} /> נגיעה במסך מפעילה קול</span>
+        </div>
+      )}
       {!items.length && (
         <div className="absolute inset-0 grid place-items-center px-8 text-center text-white/75">
           {onlyVideos ? 'עוד אין סרטונים. מעלים סרטון מכפתור "הוסף" באלבום.' : 'עוד אין תמונות.'}
