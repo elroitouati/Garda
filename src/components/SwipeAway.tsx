@@ -1,11 +1,13 @@
 import { useRef, useState, type ReactNode } from 'react'
 
 /** כרטיס שאפשר להעיף בהחלקה הצידה, כמו התראה */
-export function SwipeAway({ children, onGone }: { children: ReactNode; onGone: () => void }) {
+/** children יכול להיות פונקציה שמקבלת dismiss, בשביל כפתור X */
+export function SwipeAway({ children, onGone }: { children: ReactNode | ((dismiss: () => void) => ReactNode); onGone: () => void }) {
   const [dx, setDx] = useState(0)
   const [gone, setGone] = useState(0)
   const s = useRef<{ id: number; x0: number; y0: number; on: boolean } | null>(null)
   const moved = useRef(false)
+  const dismiss = () => { setGone(-1); setTimeout(onGone, 220) }
   return (
     <div data-no-swipe style={{ touchAction: 'pan-y' }}
       onPointerDown={(e) => { s.current = { id: e.pointerId, x0: e.clientX, y0: e.clientY, on: false }; moved.current = false }}
@@ -33,7 +35,7 @@ export function SwipeAway({ children, onGone }: { children: ReactNode; onGone: (
         opacity: gone ? 0 : 1 - Math.min(0.6, Math.abs(dx) / 400),
         transition: gone ? 'transform .22s ease-in, opacity .22s' : dx ? 'none' : 'transform .25s',
       }}>
-        {children}
+        {typeof children === 'function' ? children(dismiss) : children}
       </div>
     </div>
   )

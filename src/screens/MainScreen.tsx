@@ -567,15 +567,22 @@ export function MainScreen() {
         )}
         {eveningStory && !storyDismissed && (
           <SwipeAway onGone={() => { setStoryDismissed(true); try { localStorage.setItem(`garda-story-hidden-${today}`, '1') } catch { /* ignore */ } }}>
-            <button className="mx-4 mb-3 flex w-[calc(100%-2rem)] items-center gap-3 rounded-3xl bg-gradient-to-l from-[#1768B0] to-[#D34838] p-4 text-start text-white shadow-card"
-              onClick={() => setStory({ day: today, ids: null })}>
-              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/20"><Sparkles size={22} /></span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-lg font-bold">הסיפור של היום מוכן</span>
-                <span className="tnum block text-[14px] opacity-90">{todayCount} רגעים מהיום · לצפייה</span>
-              </span>
-              <Play size={22} className="fill-white" />
-            </button>
+            {(dismiss) => (
+              <div className="relative mx-4 mb-3">
+                <button className="flex w-full items-center gap-3 rounded-3xl bg-gradient-to-l from-[#1768B0] to-[#D34838] p-4 pe-12 text-start text-white shadow-card"
+                  onClick={() => setStory({ day: today, ids: null })}>
+                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/20"><Sparkles size={22} /></span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-lg font-bold">הסיפור של היום מוכן</span>
+                    <span className="tnum block text-[14px] opacity-90">{todayCount} רגעים מהיום · לצפייה</span>
+                  </span>
+                  <Play size={22} className="fill-white" />
+                </button>
+                <button className="absolute end-1.5 top-1.5 grid h-10 w-10 place-items-center rounded-full text-white/85 active:bg-white/15" onClick={dismiss} aria-label="הסתר עד מחר">
+                  <X size={18} />
+                </button>
+              </div>
+            )}
           </SwipeAway>
         )}
         {polls.map((p) => <PollCard key={p.id} poll={p} />)}
