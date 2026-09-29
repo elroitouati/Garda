@@ -1,5 +1,6 @@
 import { Camera, Download, Heart, Images, Play, Sparkles } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
+import { useToast } from './Toast'
 import { useStore } from '../lib/store'
 import { romeDate, shortDate, weekdayLetter } from '../lib/time'
 import type { Photo } from '../lib/types'
@@ -28,9 +29,24 @@ export function AlbumTab({ onOpen, onSlideshow, onAdd }: {
   onSlideshow: (ids: string[]) => void
   onAdd: () => void
 }) {
-  const { live, data, photoUrl } = useStore()
+  const { live, data, photoUrl, api, me, refreshLive } = useStore()
+  const toast = useToast()
   const [who, setWho] = useState<string | null>(null)
   const likes = useLikeCounts()
+  // לחיצה אחת פותחת, לחיצה כפולה נותנת לב (כמו באינסטגרם)
+  const tap = useRef<{ id: string; timer: number } | null>(null)
+  const [pop, setPop] = useState<{ id: string; n: number } | null>(null)
+  const onTap = (id: string, open: () => void) => {
+    if (tap.current?.id === id) {
+      clearTimeout(tap.current.timer); tap.current = null
+      setPop((x) => ({ id, n: (x?.n ?? 0) + 1 }))
+      if (api && me && !live.likes.some((l) => l.photo_id === id && l.member_id === me.id))
+        api.setLike(id, me.id, true).then(refreshLive, () => toast('לא הצלחתי. בדוק קליטה.'))
+      return
+    }
+    if (tap.current) clearTimeout(tap.current.timer)
+    tap.current = { id, timer: window.setTimeout(() => { tap.current = null; open() }, 260) }
+  }
   const comments = useMemo(() => {
     const m = new Map<string, number>()
     for (const c of live.comments) m.set(c.photo_id, (m.get(c.photo_id) ?? 0) + 1)
@@ -112,8 +128,10 @@ export function AlbumTab({ onOpen, onSlideshow, onAdd }: {
                 const l = likes.get(ph.id) ?? 0, c = comments.get(ph.id) ?? 0
                 const by = data?.members.find((m) => m.id === ph.member_id)
                 return (
-                  <button key={ph.id} className="relative aspect-square overflow-hidden rounded-lg bg-surface2" onClick={() => onOpen(ids(list), k)} aria-label={`תמונה של ${by?.name ?? ''}`}>
+                  <button key={ph.id} className="relative aspect-square overflow-hidden rounded-lg bg-surface2" style={{ touchAction: 'manipulation' }}
+                    onClick={() => onTap(ph.id, () => onOpen(ids(list), k))} aria-label={`תמונה של ${by?.name ?? ''}`}>
                     {u && <img src={u} alt="" className="h-full w-full object-cover" loading="lazy" />}
+                    {pop?.id === ph.id && <Heart key={pop.n} size={54} className="heart-pop pointer-events-none absolute inset-0 m-auto fill-white text-white drop-shadow-lg" />}
                     {(l > 0 || c > 0) && (
                       <span className="tnum absolute bottom-1 start-1 flex items-center gap-1 rounded-full bg-black/45 px-1.5 py-0.5 text-[11px] font-bold text-white">
                         {l > 0 && <><Heart size={10} className="fill-white" />{l}</>}{c > 0 && <span className="ms-0.5">· {c}</span>}
