@@ -620,7 +620,7 @@ export function MainScreen() {
         <Gallery photos={galleryPhotos} start={gallery.start} startComments={gallery.comments} onClose={() => setGallery(null)}
           onPlace={(p) => { setGallery(null); setSelectedPlace(null); setSnap(0); setPlacing(p); mapRef.current?.flyTo(p, 15) }} />
       )}
-      {feed && <Feed startId={feed.startId} onClose={() => setFeed(null)} onComments={(p) => setGallery({ ids: [p.id], start: 0, comments: true })} />}
+      {feed && <Feed startId={feed.startId} onClose={() => setFeed(null)} />}
       {slideshow && <Slideshow photos={photos.filter((p) => slideshow.includes(p.id))} onClose={() => setSlideshow(null)} />}
       {overlay === 'settings' && <Settings onClose={() => setOverlay(null)} />}
       {overlay === 'emergency' && <EmergencyCard onClose={() => setOverlay(null)} />}
