@@ -15,8 +15,16 @@ export function Feed({ startId, onClose, onComments }: {
 }) {
   const { live, data, me, api, photoUrl, signPhotos, refreshLive } = useStore()
   const toast = useToast()
-  const items = live.photos
+  // אפשר לראות רק סרטונים; הבחירה נזכרת בטלפון
+  const [onlyVideos, setOnlyVideos] = useState(() => { try { return localStorage.getItem('garda-feed-videos') === '1' } catch { return false } })
+  const items = useMemo(() => (onlyVideos ? live.photos.filter((p) => p.kind === 'video') : live.photos), [live.photos, onlyVideos])
   const [active, setActive] = useState(() => Math.max(0, items.findIndex((p) => p.id === startId)))
+  const pickMode = (v: boolean) => {
+    if (v === onlyVideos) return
+    try { localStorage.setItem('garda-feed-videos', v ? '1' : '0') } catch { /* ignore */ }
+    setOnlyVideos(v); setActive(0)
+    boxRef.current?.scrollTo({ top: 0 })
+  }
   const [muted, setMuted] = useState(true)
   const [pop, setPop] = useState<{ id: string; n: number } | null>(null)
   const boxRef = useRef<HTMLDivElement>(null)
@@ -49,7 +57,7 @@ export function Feed({ startId, onClose, onComments }: {
     }, { root: box, threshold: 0.6 })
     box.querySelectorAll('[data-i]').forEach((el) => io.observe(el))
     return () => io.disconnect()
-  }, [items.length])
+  }, [items])
 
   // קבצים מלאים רק לקרובים, כדי לא לבזבז גלישה
   useEffect(() => {
@@ -90,7 +98,6 @@ export function Feed({ startId, onClose, onComments }: {
     tap.current = { id: p.id, timer: window.setTimeout(() => { tap.current = null; if (p.kind === 'video') setMuted((m) => !m) }, 260) }
   }
 
-  if (!items.length) return null
   const cur = items[active]
 
   return (
@@ -154,13 +161,27 @@ export function Feed({ startId, onClose, onComments }: {
 
       <header className="pointer-events-none absolute inset-x-0 top-0 flex items-center gap-2 bg-gradient-to-b from-black/60 to-transparent px-3 pb-6 pt-[calc(var(--safe-top)+8px)]">
         <button className="pointer-events-auto grid h-11 w-11 place-items-center rounded-full bg-black/35 backdrop-blur-sm" onClick={onClose} aria-label="סגור"><X size={22} /></button>
-        <span className="flex-1 text-lg font-semibold drop-shadow">הפיד המשפחתי</span>
-        {cur?.kind === 'video' && (
+        <div className="flex flex-1 justify-center">
+          <div className="pointer-events-auto flex rounded-full bg-black/40 p-1 backdrop-blur-sm" role="radiogroup" aria-label="מה להציג">
+            {([[false, 'הכל'], [true, 'סרטונים']] as const).map(([v, label]) => (
+              <button key={label} role="radio" aria-checked={onlyVideos === v} onClick={() => pickMode(v)}
+                className={`min-h-[36px] rounded-full px-4 text-[15px] font-semibold transition ${onlyVideos === v ? 'bg-white text-black' : 'text-white/85'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {cur?.kind === 'video' ? (
           <button className="pointer-events-auto grid h-11 w-11 place-items-center rounded-full bg-black/35 backdrop-blur-sm" onClick={() => setMuted((m) => !m)} aria-label={muted ? 'הפעל קול' : 'השתק'}>
             {muted ? <VolumeX size={20} /> : <Volume2 size={20} />}
           </button>
-        )}
+        ) : <span className="w-11" />}
       </header>
+      {!items.length && (
+        <div className="absolute inset-0 grid place-items-center px-8 text-center text-white/75">
+          {onlyVideos ? 'עוד אין סרטונים. מעלים סרטון מכפתור "הוסף" באלבום.' : 'עוד אין תמונות.'}
+        </div>
+      )}
       {active === 0 && items.length > 1 && (
         <div className="pointer-events-none absolute inset-x-0 top-[calc(var(--safe-top)+64px)] flex justify-center">
           <span className="animate-rise rounded-full bg-black/45 px-3 py-1 text-[13px] font-semibold backdrop-blur-sm">גוללים למעלה לעוד · לחיצה כפולה = לב</span>
