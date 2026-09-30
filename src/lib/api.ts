@@ -25,6 +25,8 @@ export interface Api {
   // הודעות ותמונות
   fetchLive(): Promise<LiveData>
   sendMessage(m: Omit<Message, 'id' | 'created_at' | 'reminded_at'>): Promise<void>
+  /** מעלה תמונה להודעה ומחזיר את הנתיב שלה */
+  uploadMessagePhoto(memberId: string, blob: Blob): Promise<string>
   markRead(messageId: string, memberId: string): Promise<void>
   remind(messageId: string): Promise<void>
   uploadPhoto(memberId: string, full: Blob, thumb: Blob, meta: Prepared['meta']): Promise<void>
@@ -160,6 +162,11 @@ const realApi = (): Api => {
         messages: must(messages), reads: must(reads), photos: must(photos), locations: locations.data ?? [], meetings: meetings.data ?? [],
         likes: likes.data ?? [], comments: comments.data ?? [], commentLikes: commentLikes.data ?? [], polls: polls.data ?? [], votes: votes.data ?? [], tips: tips.data ?? [],
       }
+    },
+    async uploadMessagePhoto(memberId, blob) {
+      const path = `${memberId}/msg-${crypto.randomUUID()}.jpg`
+      must(await sb.storage.from('photos').upload(path, blob, { contentType: 'image/jpeg', cacheControl: '31536000' }))
+      return path
     },
     async sendMessage(m) {
       must(await sb.from('messages').insert(m))

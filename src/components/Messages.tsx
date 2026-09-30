@@ -1,4 +1,5 @@
-import { BellRing, Check, MapPin, Send, TriangleAlert, X } from 'lucide-react'
+import imageCompression from 'browser-image-compression'
+import { BellRing, Check, ImagePlus, MapPin, Send, TriangleAlert, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { alertFeedback, QUICK_MESSAGES, readOf, recipientsOf, shouldPop, timeHM } from '../lib/messages'
 import { useStore } from '../lib/store'
@@ -59,7 +60,8 @@ export function MessagePopups({ onShowOnMap }: { onShowOnMap: (lat: number, lng:
           {cur.important && <span className="inline-flex items-center gap-1 rounded-full bg-terra px-2 py-0.5 text-white"><TriangleAlert size={13} /> חשוב</span>}
           <span className="text-muted">מ{sender?.name ?? 'מישהו'}{cur.reminded_at ? ' · תזכורת' : ''}</span>
         </div>
-        <p className="mt-1.5 font-display text-[22px] leading-snug text-ink"><bdi>{cur.body}</bdi></p>
+        {cur.body !== '📷' && <p className="mt-1.5 font-display text-[22px] leading-snug text-ink"><bdi>{cur.body}</bdi></p>}
+        {cur.photo_path && <MessagePhoto path={cur.photo_path} className="mt-2 max-h-56" />}
         <div className="mt-3 flex gap-2">
           <button className={`btn flex-1 text-white ${cur.important ? 'bg-terra' : 'bg-green'}`} onClick={seen}><Check size={18} /> ראיתי</button>
           {cur.lat != null && cur.lng != null && (
@@ -95,19 +97,31 @@ export function ComposeSheet({ onClose, shareLocation }: { onClose: () => void; 
   const [picked, setPicked] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const [photo, setPhoto] = useState<{ blob: Blob; url: string } | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+  useEffect(() => () => { if (photo) URL.revokeObjectURL(photo.url) }, [photo])
   if (!me || !data) return null
   const people = data.members.filter((m) => m.active && !m.guardian_id && m.id !== me.id)
 
+  const pickPhoto = async (f: File | undefined) => {
+    if (!f) return
+    try {
+      const blob = await imageCompression(f, { maxWidthOrHeight: 1600, maxSizeMB: 0.9, initialQuality: 0.85, fileType: 'image/jpeg', useWebWorker: true })
+      setPhoto({ blob, url: URL.createObjectURL(blob) })
+    } catch { setErr('לא הצלחתי לקרוא את התמונה') }
+  }
+
   const send = async (text = body) => {
-    const t = text.trim()
+    const t = text.trim() || (photo ? '📷' : '')
     if (!t || !api) return
     if (audience === 'custom' && !picked.length) { setErr('בחר למי לשלוח'); return }
     setBusy(true); setErr(null)
     // מצרפים מיקום להודעה רק אם שיתוף המיקום שלי פעיל
     const pos = shareLocation ? await currentPositionIfAllowed() : null
     try {
+      const photo_path = photo ? await api.uploadMessagePhoto(me.id, photo.blob) : null
       await api.sendMessage({
-        sender_id: me.id, body: t, important, audience,
+        sender_id: me.id, body: t, important, audience, photo_path,
         household_id: audience === 'household' ? me.household_id : null,
         recipients: audience === 'custom' ? picked : null,
         lat: pos?.lat ?? null, lng: pos?.lng ?? null,
@@ -137,6 +151,15 @@ export function ComposeSheet({ onClose, shareLocation }: { onClose: () => void; 
 
         <label className="label" htmlFor="msg-body">או כתוב בעצמך</label>
         <textarea id="msg-body" className="input min-h-[88px] py-2" maxLength={500} value={body} onChange={(e) => setBody(e.target.value)} placeholder="מה קורה?" />
+        {photo ? (
+          <div className="relative mt-2 w-fit">
+            <img src={photo.url} alt="התמונה שתישלח" className="max-h-44 rounded-2xl object-cover" />
+            <button className="absolute end-1.5 top-1.5 grid h-9 w-9 place-items-center rounded-full bg-black/55 text-white" onClick={() => setPhoto(null)} aria-label="הסר תמונה"><X size={17} /></button>
+          </div>
+        ) : (
+          <button className="btn-ghost mt-2 w-full" onClick={() => fileRef.current?.click()}><ImagePlus size={19} /> הוסף תמונה</button>
+        )}
+        <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => { void pickPhoto(e.target.files?.[0]); e.target.value = '' }} />
 
         <span className="label mt-4">למי</span>
         <div className="grid grid-cols-3 gap-1 rounded-2xl bg-surface2 p-1" role="radiogroup">
@@ -173,7 +196,7 @@ export function ComposeSheet({ onClose, shareLocation }: { onClose: () => void; 
         </label>
 
         {err && <p role="alert" className="mt-3 font-semibold text-terra">{err}</p>}
-        <button className={`btn mt-4 w-full text-lg text-white ${important ? 'bg-terra' : 'bg-green'}`} disabled={busy || !body.trim()} onClick={() => send()}>
+        <button className={`btn mt-4 w-full text-lg text-white ${important ? 'bg-terra' : 'bg-green'}`} disabled={busy || (!body.trim() && !photo)} onClick={() => send()}>
           <Send size={19} /> {busy ? 'שולח…' : 'שלח'}
         </button>
       </div>
@@ -226,7 +249,7 @@ export function MessageHistory({ onCompose }: { onCompose: () => void }) {
                   {m.important && <span className="rounded-full bg-terra px-1.5 text-[12px] font-bold text-white">חשוב</span>}
                   {m.audience !== 'all' && <span>· {m.audience === 'household' ? 'למשפחה' : `ל-${rec.length}`}</span>}
                 </span>
-                <span className="block text-[16px] leading-snug"><bdi>{m.body}</bdi></span>
+                {m.body !== '📷' && <span className="block text-[16px] leading-snug"><bdi>{m.body}</bdi></span>}
                 {mine && (
                   <span className="mt-1 flex items-center gap-2 text-[14px] font-semibold text-green">
                     <span className="tnum">{seenBy.length} מתוך {rec.length} ראו</span>
@@ -235,6 +258,7 @@ export function MessageHistory({ onCompose }: { onCompose: () => void }) {
                 )}
               </span>
             </button>
+            {m.photo_path && <MessagePhoto path={m.photo_path} className="ms-12 mt-2 max-h-48" />}
             {mine && expanded && (
               <div className="mt-3 border-t border-line pt-3">
                 {notSeen.length > 0 ? (
@@ -254,5 +278,27 @@ export function MessageHistory({ onCompose }: { onCompose: () => void }) {
         )
       })}
     </ul>
+  )
+}
+
+/** תמונה בהודעה; נגיעה פותחת אותה במסך מלא */
+function MessagePhoto({ path, className = '' }: { path: string; className?: string }) {
+  const { photoUrl, signPhotos } = useStore()
+  const [full, setFull] = useState(false)
+  useEffect(() => { signPhotos([path]) }, [path]) // eslint-disable-line react-hooks/exhaustive-deps
+  const u = photoUrl(path)
+  if (!u) return <div className={`h-32 w-44 animate-pulse rounded-2xl bg-surface2 ${className}`} />
+  return (
+    <>
+      <button className="block" onClick={(e) => { e.stopPropagation(); setFull(true) }} aria-label="הגדל תמונה">
+        <img src={u} alt="תמונה בהודעה" className={`rounded-2xl object-cover ${className}`} />
+      </button>
+      {full && (
+        <div className="fixed inset-0 z-[95] grid place-items-center bg-black/90 p-3" onClick={() => setFull(false)} role="dialog" aria-label="תמונה">
+          <img src={u} alt="" className="max-h-full max-w-full object-contain" />
+          <button className="absolute end-3 top-[calc(var(--safe-top)+10px)] grid h-11 w-11 place-items-center rounded-full bg-white/15 text-white" aria-label="סגור"><X size={22} /></button>
+        </div>
+      )}
+    </>
   )
 }

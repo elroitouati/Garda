@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
     }
     payload = {
       title: `${m.important ? 'חשוב · ' : ''}${sender?.name ?? 'הודעה'}${m.reminded_at ? ' (תזכורת)' : ''}`,
-      body: m.body, tag: `msg-${m.id}`, important: m.important, url: APP_URL,
+      body: m.photo_path ? `📷 ${m.body}` : m.body, tag: `msg-${m.id}`, important: m.important, url: APP_URL,
     }
   } else if (kind === 'meeting') {
     const { data: mt } = await sb.from('meetings').select('*').eq('id', id).single()

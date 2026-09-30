@@ -141,6 +141,11 @@ export function demoApi(): Api {
     async setPin(pin) { PIN.v = pin; return { ok: true } },
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn) },
     async fetchLive() { return structuredClone(live) },
+    async uploadMessagePhoto(memberId, blob) {
+      const path = `${memberId}/msg-${id()}.jpg`
+      avatars[path] = URL.createObjectURL(blob)
+      return path
+    },
     async sendMessage(m) {
       live.messages.unshift({ ...m, id: id(), created_at: new Date().toISOString(), reminded_at: null })
       emitLive()

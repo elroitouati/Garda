@@ -100,6 +100,7 @@ export type Message = {
   recipients: string[] | null
   lat: number | null
   lng: number | null
+  photo_path?: string | null
   reminded_at: string | null
   created_at: string
 }
