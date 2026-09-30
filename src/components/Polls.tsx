@@ -7,16 +7,13 @@ import { Avatar } from './Avatar'
 import { useToast } from './Toast'
 
 const QUESTIONS = ['איפה אוכלים הערב?', 'מתי יוצאים מחר?', 'מה עושים אחר הצהריים?', 'מי בא לבריכה?']
-const OPEN_HOURS = 24, CLOSED_SHOW_HOURS = 6
+const OPEN_HOURS = 24
 
-/** סקרים שמוצגים עכשיו: פתוחים מהיממה האחרונה, וסגורים מהשעות האחרונות (כדי לראות מי ניצח) */
+/** סקרים שמוצגים עכשיו: פתוחים מהיממה האחרונה. סקר שנסגר נעלם מיד */
 export function usePolls() {
   const { live } = useStore()
   const now = Date.now()
-  return live.polls.filter((p) => {
-    const age = (now - new Date(p.created_at).getTime()) / 3600_000
-    return p.closed ? age < OPEN_HOURS + CLOSED_SHOW_HOURS : age < OPEN_HOURS
-  })
+  return live.polls.filter((p) => !p.closed && (now - new Date(p.created_at).getTime()) / 3600_000 < OPEN_HOURS)
 }
 
 export function PollCard({ poll }: { poll: Poll }) {
@@ -70,7 +67,10 @@ export function PollCard({ poll }: { poll: Poll }) {
       <div className="mt-2 flex items-center justify-between text-[14px] text-muted">
         <span className="tnum">{votes.length} מתוך {people} הצביעו{!poll.closed && mine != null ? ' · לחיצה נוספת מבטלת' : ''}</span>
         {canClose && !poll.closed && (
-          <button className="font-semibold text-terra" onClick={async () => { try { await api?.closePoll(poll.id); await refreshLive() } catch { toast('לא הצלחתי לסגור') } }}>סגור סקר</button>
+          <button className="font-semibold text-terra" onClick={async () => {
+            const win = top > 0 ? poll.options[counts.indexOf(top)] : null
+            try { await api?.closePoll(poll.id); await refreshLive(); toast(win ? `הסקר נסגר · ניצח: ${win} 🏆` : 'הסקר נסגר') } catch { toast('לא הצלחתי לסגור') }
+          }}>סגור סקר</button>
         )}
       </div>
     </section>
