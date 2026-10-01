@@ -1,5 +1,5 @@
 // פתיחה מהתראה: ?story=2026-09-29 (הסיפור של היום) או ?wrapped=1
-export type OpenRequest = { story: string } | { wrapped: true }
+export type OpenRequest = { story: string } | { wrapped: true } | { journey: true }
 const KEY = 'garda-open'
 
 function parse(search: string): OpenRequest | null {
@@ -7,6 +7,7 @@ function parse(search: string): OpenRequest | null {
   const story = sp.get('story')
   if (story && /^\d{4}-\d{2}-\d{2}$/.test(story)) return { story }
   if (sp.has('wrapped')) return { wrapped: true }
+  if (sp.has('journey')) return { journey: true }
   return null
 }
 

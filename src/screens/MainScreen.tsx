@@ -10,6 +10,7 @@ import { SwipeAway } from '../components/SwipeAway'
 import { Gallery } from '../components/Gallery'
 import { pickStory, Story } from '../components/Story'
 import { Wrapped, WRAPPED_FROM } from '../components/Wrapped'
+import { JourneyPrep } from './JourneyPrep'
 import { Welcome } from '../components/Welcome'
 import { EmergencyPhonePrompt, FridayCard, LocationConsent, LocationHelp, MeetingCard, MeetingComposer, MeetingPopup, PushCard, ShabbatScreen, TipCard, useWalkingRoute } from '../components/Live'
 import { ComposeSheet, MessageHistory, MessagePopups } from '../components/Messages'
@@ -66,6 +67,7 @@ export function MainScreen() {
   const [fabOpen, setFabOpen] = useState(false)
   const [story, setStory] = useState<{ day: string; ids: string[] | null } | null>(null)
   const [wrapped, setWrapped] = useState(false)
+  const [journey, setJourney] = useState(false)
   const [pending, setPending] = useState(0)
   // תמונות שממתינות לקליטה: מנסים שוב כשחוזרת רשת, בפתיחה, וכל חצי דקה
   useEffect(() => {
@@ -303,7 +305,7 @@ export function MainScreen() {
   // פתיחה מהתראה: הסיפור של היום או ה-Wrapped
   useEffect(() => {
     if (!data || !me || welcome || !settled) return
-    const handle = (r: OpenRequest) => { if ('story' in r) setStory({ day: r.story, ids: null }); else setWrapped(true) }
+    const handle = (r: OpenRequest) => { if ('story' in r) setStory({ day: r.story, ids: null }); else if ('journey' in r) { if (me.is_admin) setJourney(true) } else setWrapped(true) }
     const r = takeOpen()
     if (r) handle(r)
     return onOpenMessage(handle)
@@ -712,6 +714,7 @@ export function MainScreen() {
       )}
       {feed && <Feed startId={feed.startId} onClose={() => setFeed(null)} />}
       {story && storyPhotos.length > 0 && <Story day={story.day} photos={storyPhotos} onClose={() => setStory(null)} onFeed={() => { setStory(null); setFeed({ startId: null }) }} />}
+      {journey && <JourneyPrep onClose={() => setJourney(false)} />}
       {wrapped && <Wrapped preview={!wrappedOpen} onClose={() => setWrapped(false)} />}
       {overlay === 'settings' && <Settings onClose={() => setOverlay(null)} />}
       {overlay === 'emergency' && <EmergencyCard onClose={() => setOverlay(null)} />}
