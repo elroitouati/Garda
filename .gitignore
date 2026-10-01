@@ -27,3 +27,8 @@ dist-ssr
 .env.*
 !.env.example
 dev-dist
+
+# אנימציות: צילומים פרטיים ותוצרים לא נכנסים לגיט
+motion-*/faces/
+motion-*/out/
+motion-*/stills/
