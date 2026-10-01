@@ -73,7 +73,7 @@ export function JourneyPrep({ onClose }: { onClose: () => void }) {
   // ── התקדמות ──
   const progress = (() => {
     let total = 0, done = 0
-    for (const m of members) { const p = get(`person:${m.id}`); total += 2; done += (p.face || m.avatar_path ? 1 : 0) + (String(p.line ?? '').trim() ? 1 : 0) }
+    for (const m of members) { const p = get(`person:${m.id}`); total += 1; done += p.face || m.avatar_path ? 1 : 0 }
     const g = get('general'); total += 3; done += (g.plane ? 1 : 0) + (g.arrival ? 1 : 0) + (g.group ? 1 : 0)
     for (const day of trip.days) { const x = get(`day:${day.date}`); total += 1; done += ((x.photoIds as string[] | undefined)?.length || x.byLikes) ? 1 : 0 }
     return total ? Math.round((done / total) * 100) : 0
@@ -123,31 +123,23 @@ export function JourneyPrep({ onClose }: { onClose: () => void }) {
             <div className="h-2 overflow-hidden rounded-full bg-surface2"><div className="h-full rounded-full bg-gradient-to-l from-terra to-green transition-all" style={{ width: `${progress}%` }} /></div>
           </div>
 
-          <H n="01" title="כל אחד ורגע משלו" hint="תמונת פנים (תופיע בחלון המטוס), משפט אישי, והרגע שלו מהטיול. אם יש תמונת פרופיל, היא כבר בפנים." />
-          <div className="mt-3 space-y-3 px-4">
+          <H n="01" title="הפנים למטוס" hint="כל אחד יופיע בחלון של המטוס. מי שיש לו תמונת פרופיל כבר בפנים; נגיעה בפנים מחליפה." />
+          <div className="mx-4 mt-3 grid grid-cols-4 gap-x-2 gap-y-4 rounded-3xl bg-surface p-4 shadow-card">
             {members.map((m) => {
-              const p = get(`person:${m.id}`)
-              const face = p.face as Img | undefined
-              const moment = p.moment as Img | undefined
+              const face = get(`person:${m.id}`).face as Img | undefined
+              const u = imgUrl(face ?? null)
+              const has = !!(u || m.avatar_path)
               return (
-                <div key={m.id} className="space-y-3 rounded-3xl bg-surface p-4 shadow-card">
-                  <div className="flex items-center gap-3">
-                    {face ? null : m.avatar_path ? (
-                      <button onClick={() => upload(`face-${m.id}`, (path) => set(`person:${m.id}`, { face: { path } }, true))} aria-label="החלף תמונת פנים"><Avatar member={m} size={80} /></button>
-                    ) : null}
-                    {(face || !m.avatar_path) && <ImgSlot img={face ?? null} slot={`face-${m.id}`} round label="+ פנים" onSet={(v) => set(`person:${m.id}`, { face: v }, true)} />}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 text-lg font-bold"><span className="h-3 w-3 rounded-full" style={{ background: m.color }} />{m.name}</div>
-                      {m.avatar_path && !face && (
-                        <button className="mt-1 text-[14px] font-semibold text-green" onClick={() => upload(`face-${m.id}`, (path) => set(`person:${m.id}`, { face: { path } }, true))}>החלף לתמונה אחרת</button>
-                      )}
-                    </div>
-                  </div>
-                  <input className="input" maxLength={90} placeholder="משפט אישי: משהו שמתאר אותו בטיול" value={String(p.line ?? '')} onChange={(e) => set(`person:${m.id}`, { line: e.target.value })} />
-                  <div className="text-[13px] font-semibold text-muted">הרגע שלו מהטיול</div>
-                  <ImgSlot img={moment ?? null} slot={`moment-${m.id}`} label="+ תמונה" album={{}} onSet={(v) => set(`person:${m.id}`, { moment: v }, true)} />
-                  <textarea className="input min-h-[64px] py-2" maxLength={160} placeholder="מה קרה? למשל: נהג בקארטינג כמו בפורמולה 1" value={String(p.momentText ?? '')} onChange={(e) => set(`person:${m.id}`, { momentText: e.target.value })} />
-                </div>
+                <button key={m.id} className="flex flex-col items-center gap-1.5" onClick={() => upload(`face-${m.id}`, (path) => set(`person:${m.id}`, { face: { path } }, true))} aria-label={`תמונת פנים של ${m.name}`}>
+                  <span className="relative">
+                    <span className={`relative grid h-16 w-16 place-items-center overflow-hidden rounded-full ${has ? '' : 'border-2 border-dashed border-line bg-surface2 text-[22px] text-muted'}`}>
+                      {u ? <img src={u} alt="" className="h-full w-full object-cover" /> : m.avatar_path ? <Avatar member={m} size={64} /> : '+'}
+                      {uploading === `face-${m.id}` && <span className="absolute inset-0 grid place-items-center bg-black/45 text-[12px] font-bold text-white">מעלה…</span>}
+                    </span>
+                    {has && <span className="absolute -bottom-0.5 -end-0.5 grid h-5 w-5 place-items-center rounded-full bg-green text-white ring-2 ring-surface"><Check size={12} /></span>}
+                  </span>
+                  <span className="w-full truncate text-center text-[13px] font-semibold">{m.name}</span>
+                </button>
               )
             })}
           </div>
