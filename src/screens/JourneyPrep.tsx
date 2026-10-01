@@ -19,7 +19,7 @@ export function JourneyPrep({ onClose }: { onClose: () => void }) {
   const { api, me, data: trip, live, photoUrl, signPhotos } = useStore()
   const toast = useToast()
   const [d, setD] = useState<Data | null>(null)
-  const [picker, setPicker] = useState<{ max: number; day?: string; selected: string[]; onDone: (ids: string[]) => void } | null>(null)
+  const [picker, setPicker] = useState<{ max: number; day?: string; selected: string[]; onDone: (ids: string[]) => void; onPhone?: () => void } | null>(null)
   const timers = useRef<Record<string, number>>({})
   const fileRef = useRef<HTMLInputElement>(null)
   const uploadCb = useRef<((path: string) => void) | null>(null)
@@ -84,20 +84,22 @@ export function JourneyPrep({ onClose }: { onClose: () => void }) {
     img: Img; slot: string; onSet: (v: Img) => void; round?: boolean; wide?: boolean; label: string; album?: { day?: string }
   }) => {
     const u = imgUrl(img)
+    const fromPhone = () => upload(slot, (path) => onSet({ path }))
+    const fromAlbum = () => setPicker({ max: 1, day: album?.day, selected: img?.id ? [img.id] : [], onDone: (ids) => onSet(ids[0] ? { id: ids[0] } : null), onPhone: fromPhone })
     return (
       <div className={`flex ${wide ? 'flex-col' : 'items-center'} gap-2`}>
-        <div className={`relative grid shrink-0 place-items-center overflow-hidden border-2 ${u ? 'border-transparent' : 'border-dashed border-line'} bg-surface2 text-[13px] text-muted ${round ? 'h-20 w-20 rounded-full' : wide ? 'aspect-video w-full rounded-2xl' : 'h-20 w-20 rounded-2xl'}`}>
+        <div role="button" tabIndex={0} onClick={album ? fromAlbum : fromPhone} className={`relative grid shrink-0 cursor-pointer place-items-center overflow-hidden border-2 ${u ? 'border-transparent' : 'border-dashed border-line'} bg-surface2 text-[13px] text-muted ${round ? 'h-20 w-20 rounded-full' : wide ? 'aspect-video w-full rounded-2xl' : 'h-20 w-20 rounded-2xl'}`}>
           {u ? <img src={u} alt="" className="absolute inset-0 h-full w-full object-cover" /> : label}
           {uploading === slot && <span className="absolute inset-0 grid place-items-center bg-black/40 font-bold text-white">מעלה…</span>}
-          {img && <button className="absolute end-1 top-1 grid h-7 w-7 place-items-center rounded-full bg-black/55 text-white" onClick={() => onSet(null)} aria-label="הסר"><X size={14} /></button>}
+          {img && <button className="absolute end-1 top-1 grid h-7 w-7 place-items-center rounded-full bg-black/55 text-white" onClick={(e) => { e.stopPropagation(); onSet(null) }} aria-label="הסר"><X size={14} /></button>}
         </div>
         <div className={`flex gap-2 ${wide ? '' : 'flex-col'}`}>
           {album && (
-            <button className="btn-ghost min-h-[40px] px-3 text-[14px]" onClick={() => setPicker({ max: 1, day: album.day, selected: img?.id ? [img.id] : [], onDone: (ids) => onSet(ids[0] ? { id: ids[0] } : null) })}>
+            <button className="btn-ghost min-h-[40px] px-3 text-[14px]" onClick={fromAlbum}>
               <Images size={16} /> מהאלבום
             </button>
           )}
-          <button className="btn-ghost min-h-[40px] px-3 text-[14px]" onClick={() => upload(slot, (path) => onSet({ path }))}><ImagePlus size={16} /> מהטלפון</button>
+          <button className="btn-ghost min-h-[40px] px-3 text-[14px]" onClick={fromPhone}><ImagePlus size={16} /> מהטלפון</button>
         </div>
       </div>
     )
@@ -130,7 +132,9 @@ export function JourneyPrep({ onClose }: { onClose: () => void }) {
               return (
                 <div key={m.id} className="space-y-3 rounded-3xl bg-surface p-4 shadow-card">
                   <div className="flex items-center gap-3">
-                    {face ? null : m.avatar_path ? <Avatar member={m} size={80} /> : null}
+                    {face ? null : m.avatar_path ? (
+                      <button onClick={() => upload(`face-${m.id}`, (path) => set(`person:${m.id}`, { face: { path } }, true))} aria-label="החלף תמונת פנים"><Avatar member={m} size={80} /></button>
+                    ) : null}
                     {(face || !m.avatar_path) && <ImgSlot img={face ?? null} slot={`face-${m.id}`} round label="+ פנים" onSet={(v) => set(`person:${m.id}`, { face: v }, true)} />}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 text-lg font-bold"><span className="h-3 w-3 rounded-full" style={{ background: m.color }} />{m.name}</div>
@@ -218,8 +222,8 @@ export function JourneyPrep({ onClose }: { onClose: () => void }) {
 }
 
 /** בחירת תמונות מהאלבום (לפי יום, או הכל) */
-function AlbumPicker({ photos, day, max, selected, onDone, onClose }: {
-  photos: Photo[]; day?: string; max: number; selected: string[]; onDone: (ids: string[]) => void; onClose: () => void
+function AlbumPicker({ photos, day, max, selected, onDone, onClose, onPhone }: {
+  photos: Photo[]; day?: string; max: number; selected: string[]; onDone: (ids: string[]) => void; onClose: () => void; onPhone?: () => void
 }) {
   const { photoUrl } = useStore()
   const [sel, setSel] = useState<string[]>(selected)
@@ -233,6 +237,11 @@ function AlbumPicker({ photos, day, max, selected, onDone, onClose }: {
         <h2 className="flex-1 text-lg">בחר {max === 1 ? 'תמונה' : `עד ${max} תמונות`} <span className="tnum text-muted">({sel.length})</span></h2>
         <button className="btn-primary my-2 px-4" onClick={() => { onDone(sel); onClose() }}><Check size={18} /> סיום</button>
       </header>
+      {onPhone && (
+        <div className="px-3 pt-2">
+          <button className="btn-ghost w-full" onClick={() => { onClose(); onPhone() }}><ImagePlus size={18} /> תמונה מהטלפון</button>
+        </div>
+      )}
       {day && (
         <div className="flex gap-2 px-3 py-2">
           <button onClick={() => setAll(false)} className={`min-h-[36px] rounded-full px-3 text-[14px] font-semibold ${!all ? 'bg-ink text-bg' : 'bg-surface2'}`}>מהיום הזה</button>
