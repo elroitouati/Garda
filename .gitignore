@@ -32,3 +32,4 @@ dev-dist
 motion-*/faces/
 motion-*/out/
 motion-*/stills/
+__pycache__/
