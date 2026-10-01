@@ -56,6 +56,8 @@ function parseSeed(): Record<string, Record<string, unknown>[]> {
   return out
 }
 
+const journey: Record<string, Record<string, unknown>> = {}
+
 export function demoApi(): Api {
   const s = parseSeed()
   let uid = 0
@@ -211,6 +213,8 @@ export function demoApi(): Api {
       if (option != null) live.votes.push({ poll_id: pollId, member_id: memberId, option })
       emitLive()
     },
+    async journeyLoad() { return structuredClone(journey) },
+    async journeySave(key, data) { journey[key] = structuredClone(data) },
     async addTip(t) { live.tips.unshift({ ...t, id: id(), created_at: new Date().toISOString() }); emitLive() },
     async deleteTip(tid) { live.tips = live.tips.filter((x) => x.id !== tid); emitLive() },
     async closePoll(pid) {

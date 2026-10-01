@@ -52,6 +52,9 @@ export interface Api {
   closePoll(id: string): Promise<void>
   // טיפים למקומות
   addTip(t: Omit<PlaceTip, 'id' | 'created_at'>): Promise<void>
+  // חומרים ל"המסע" (מנהלים)
+  journeyLoad(): Promise<Record<string, Record<string, unknown>>>
+  journeySave(key: string, data: Record<string, unknown>, memberId: string): Promise<void>
   deleteTip(id: string): Promise<void>
 }
 
@@ -233,6 +236,13 @@ const realApi = (): Api => {
     },
     async closePoll(id) {
       must(await sb.from('polls').update({ closed: true }).eq('id', id))
+    },
+    async journeyLoad() {
+      const rows = must(await sb.from('journey').select('key,data')) as { key: string; data: Record<string, unknown> }[]
+      return Object.fromEntries(rows.map((r) => [r.key, r.data]))
+    },
+    async journeySave(key, data, memberId) {
+      must(await sb.from('journey').upsert({ key, data, updated_by: memberId, updated_at: new Date().toISOString() }))
     },
     async addTip(t) {
       must(await sb.from('place_tips').insert(t))
