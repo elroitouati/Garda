@@ -306,3 +306,4 @@ button { -webkit-user-select: none; user-select: none; }
   .journey .j-drop, .journey .j-plate, .journey .j-rise, .journey .j-pop, .journey .j-slam, .journey .j-paper { animation-name: fade-in; animation-duration: .3s; }
   .journey .j-bob, .journey .j-kenburns { animation: none; }
 }
+.journey .j-scene { animation: fade-in .6s cubic-bezier(.16,1,.3,1) both; }

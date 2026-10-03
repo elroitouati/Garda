@@ -1,5 +1,5 @@
 import * as maplibregl from 'maplibre-gl'
-import { RotateCcw, Volume2, VolumeX, X } from 'lucide-react'
+import { Maximize, Minimize, Pause, Play, RotateCcw, Volume2, VolumeX, X } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { distance } from '../lib/geo'
 import { sfx, sfxEnable, sfxUnlock } from '../lib/sfx'
@@ -9,8 +9,8 @@ import type { Day, Member, Photo } from '../lib/types'
 import { photoDay } from './Album'
 import { STYLE } from './MapView'
 
-/** "המסע" נפתח לכולם בערב של יום החזרה; מנהלים רואים תצוגה מקדימה */
-export const JOURNEY_FROM = new Date('2026-10-04T18:00:00+02:00')
+/** "המסע" נפתח לכולם כשמנהל משחרר אותו (journey.key = 'release'); עד אז רק מנהלים רואים */
+export const MASA_EVENT = 'garda-masa-release'
 
 type LngLat = [number, number]
 type Img = { id?: string; path?: string } | null
@@ -38,6 +38,15 @@ const SPOTS: Record<number, [number, number, number, number][]> = { // x%, y%, �
   4: [[27, 30, -6, 37], [73, 33, 5, 37], [30, 72, 4, 37], [70, 75, -5, 37]],
   5: [[25, 29, -6, 35], [75, 31, 5, 35], [27, 74, 4, 35], [73, 76, -5, 35], [50, 52, -1, 39]],
 }
+
+const dayDur = (plan: DayPlan) => {
+  const vid = plan.media.findIndex((p) => p.kind === 'video')
+  const vDur = vid >= 0 ? Math.min(12, plan.media[vid].duration ?? 8) : 0
+  return Math.max(DROP + plan.media.length * GAP + 2.8, vid >= 0 ? DROP + vid * GAP + vDur + 0.8 : 0, 5.5)
+}
+const statDur = (s: Stat) => (s.kind === 'endless' ? 5 : 3.4)
+const FACES = 5.5, FINALE = 6
+const clock = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
 
 const ll = (p: LngLat) => ({ lng: p[0], lat: p[1] })
 const pathLen = (pts: LngLat[]) => pts.reduce((s, p, i) => (i ? s + distance(ll(pts[i - 1]), ll(p)) : 0), 0)
@@ -205,6 +214,36 @@ export function Journey({ onClose }: { onClose: () => void }) {
   // מאפסים את השעון מיד, כדי שפריים באמצע המעבר לא ידלג פרק נוסף
   const go = useCallback((d: number) => { elapsed.current = 0; durRef.current = Infinity; cues.current = []; const to = Math.max(0, Math.min(chapters.length - 1, idxRef.current + d)); idxRef.current = to; setIdx(to) }, [chapters.length])
   const afterIntro = useCallback(() => { if (idxRef.current === 0) go(1) }, [go])
+  const jump = useCallback((to: number) => { elapsed.current = 0; durRef.current = Infinity; cues.current = []; idxRef.current = to; setIdx(to) }, [])
+
+  // ציר זמן אחד לכל הסרט
+  const [introDur, setIntroDur] = useState(18.6)
+  const lens = useMemo(() => chapters.map((c) => (c.kind === 'intro' ? introDur : c.kind === 'day' ? dayDur(c.plan) : c.kind === 'stat' ? statDur(c.stat) : c.kind === 'faces' ? FACES : FINALE)), [chapters, introDur])
+  const starts = useMemo(() => { let acc = 0; return lens.map((l) => { const st = acc; acc += l; return st }) }, [lens])
+  const total = lens.reduce((a, b) => a + b, 0)
+  const timeLabel = useRef<HTMLSpanElement>(null)
+  const seek = (frac: number) => {
+    const target = frac * total
+    let i = 0
+    while (i < chapters.length - 1 && starts[i + 1] <= target) i++
+    jump(i)
+    if (paused) setPaused(false)
+  }
+
+  // הפקדים נעלמים כמו בנגן וידאו, ונגיעה מחזירה אותם
+  const [chrome, setChrome] = useState(true)
+  const hideT = useRef(0)
+  const poke = useCallback(() => { setChrome(true); clearTimeout(hideT.current); hideT.current = window.setTimeout(() => setChrome(false), 2800) }, [])
+  useEffect(() => { poke(); return () => clearTimeout(hideT.current) }, [poke])
+  useEffect(() => { if (paused) { clearTimeout(hideT.current); setChrome(true) } else poke() }, [paused, poke])
+
+  // מסך מלא (בטלפונים שתומכים)
+  const root = useRef<HTMLDivElement>(null)
+  const [full, setFull] = useState(false)
+  const canFull = typeof document !== 'undefined' && !!document.fullscreenEnabled
+  useEffect(() => { const h = () => setFull(!!document.fullscreenElement); document.addEventListener('fullscreenchange', h); return () => document.removeEventListener('fullscreenchange', h) }, [])
+  const toggleFull = () => { if (document.fullscreenElement) void document.exitFullscreen().catch(() => {}); else void root.current?.requestFullscreen({ navigationUI: 'hide' }).catch(() => {}) }
+  useEffect(() => () => { if (document.fullscreenElement) void document.exitFullscreen().catch(() => {}) }, [])
 
   useEffect(() => { sfxUnlock(); return () => sfxEnable(true) }, [])
   useEffect(() => { sfxEnable(sound); videos.current.forEach((v) => { v.muted = !sound }) }, [sound])
@@ -219,13 +258,16 @@ export function Journey({ onClose }: { onClose: () => void }) {
         if (elapsed.current >= durRef.current) { durRef.current = Infinity; go(1) }
       }
       const iv = introRef.current
-      const k = ch?.kind === 'intro' && iv?.duration ? iv.currentTime / iv.duration : durRef.current === Infinity ? (ch?.kind === 'finale' ? 1 : 0) : elapsed.current / durRef.current
-      if (fill.current) fill.current.style.width = `${Math.min(100, k * 100)}%`
+      const i = idxRef.current
+      const inCh = ch?.kind === 'intro' ? (iv?.currentTime ?? 0) : Math.min(elapsed.current, lens[i] ?? 0)
+      const now2 = Math.min(total, (starts[i] ?? 0) + inCh)
+      if (fill.current) fill.current.style.width = `${total ? (now2 / total) * 100 : 0}%`
+      if (timeLabel.current) timeLabel.current.textContent = `${clock(now2)} / ${clock(total)}`
       raf = requestAnimationFrame(loop)
     }
     raf = requestAnimationFrame(loop)
     return () => cancelAnimationFrame(raf)
-  }, [ch, go])
+  }, [ch, go, lens, starts, total])
 
   // מסלול עד היום הזה (בלי אנימציה), למעבר קדימה/אחורה
   const routeUntil = useCallback((n: number): LngLat[] => plans.slice(0, n).flatMap((p) => p.path), [plans])
@@ -250,9 +292,7 @@ export function Journey({ onClose }: { onClose: () => void }) {
       const base = routeUntil(i)
       const seg: LngLat[] = [...(base.length ? [base[base.length - 1]] : []), ...plan.path]
       const stops = plans.slice(0, i).map((p) => p.path[p.path.length - 1]).filter(Boolean)
-      const vid = plan.media.findIndex((p) => p.kind === 'video')
-      const vDur = vid >= 0 ? Math.min(12, plan.media[vid].duration ?? 8) : 0
-      durRef.current = Math.max(DROP + plan.media.length * GAP + 2.8, vid >= 0 ? DROP + vid * GAP + vDur + 0.8 : 0, 5.5)
+      durRef.current = dayDur(plan)
       cues.current = [
         { at: 0, run: () => {
           if (!m || !mapReady || !plan.path.length) return
@@ -284,10 +324,10 @@ export function Journey({ onClose }: { onClose: () => void }) {
         } })),
       ]
     } else if (ch.kind === 'stat') {
-      durRef.current = ch.stat.kind === 'endless' ? 5 : 3.4
+      durRef.current = statDur(ch.stat)
       cues.current = [{ at: 0.15, run: () => (ch.stat.kind === 'person' ? sfx.pop(true) : undefined) }]
     } else if (ch.kind === 'faces') {
-      durRef.current = 5.5
+      durRef.current = FACES
       cues.current = (trip?.members.filter((x) => x.active) ?? []).map((_, k) => ({ at: 0.5 + k * 0.12, run: () => sfx.pop(k % 2 === 0) }))
     } else {
       durRef.current = Infinity
@@ -308,19 +348,10 @@ export function Journey({ onClose }: { onClose: () => void }) {
     videos.current.forEach((v) => { if (paused) v.pause(); else if (v.currentTime > 0 && !v.ended) void v.play().catch(() => {}) })
   }, [paused, ch])
 
-  // ── שליטה: נגיעה בצד שמאל = הבא, בצד ימין = הקודם, החזקה = השהיה ──
-  const hold = useRef<{ t: number; timer: number; held: boolean } | null>(null)
-  const down = () => { const timer = window.setTimeout(() => { if (hold.current) { hold.current.held = true; setPaused(true) } }, 220); hold.current = { t: Date.now(), timer, held: false } }
-  const up = (e: React.PointerEvent) => {
-    const h = hold.current; hold.current = null
-    if (!h) return
-    clearTimeout(h.timer)
-    if (h.held) { setPaused(false); return }
-    const x = e.clientX / window.innerWidth
-    go(x < 0.6 ? 1 : -1)
-  }
+  // ── שליטה כמו בסרט: נגיעה מציגה/מסתירה פקדים, החצים מדלגים ──
+  const tapScreen = () => { if (chrome && !paused) { clearTimeout(hideT.current); setChrome(false) } else poke() }
   useEffect(() => {
-    const k = (e: KeyboardEvent) => { if (e.key === 'ArrowLeft') go(1); else if (e.key === 'ArrowRight') go(-1); else if (e.key === 'Escape') onClose(); else if (e.key === ' ') setPaused((p) => !p) }
+    const k = (e: KeyboardEvent) => { if (e.key === 'ArrowLeft') go(1); else if (e.key === 'ArrowRight') go(-1); else if (e.key === 'Escape' && !document.fullscreenElement) onClose(); else if (e.key === ' ') setPaused((p) => !p) }
     window.addEventListener('keydown', k)
     return () => window.removeEventListener('keydown', k)
   }, [go, onClose])
@@ -331,44 +362,58 @@ export function Journey({ onClose }: { onClose: () => void }) {
   const onMap = ch?.kind === 'day' || ch?.kind === 'intro'
 
   return (
-    <div className={`journey fixed inset-0 z-[80] select-none overflow-hidden ${paused ? 'j-paused' : ''}`} style={{ background: P.ink, color: P.ink }} dir="rtl" role="dialog" aria-modal="true" aria-label="המסע">
+    <div ref={root} className={`journey fixed inset-0 z-[80] select-none overflow-hidden ${paused ? 'j-paused' : ''}`} style={{ background: '#F3E8CF', color: P.ink }} dir="rtl" role="dialog" aria-modal="true" aria-label="המסע">
       <div ref={mapEl} className="absolute inset-0 transition-[filter] duration-700" style={{ filter: onMap ? 'none' : 'saturate(.6) brightness(.85)' }} />
       {ch?.kind === 'day' && <div className="pointer-events-none absolute inset-x-0 top-0 h-56" style={{ background: 'linear-gradient(rgba(22,38,63,.38), transparent)' }} />}
 
-      <div key={idx} className="absolute inset-0">
+      <div key={idx} className="j-scene absolute inset-0">
         {ch?.kind === 'intro' && (
           <video ref={introRef} src={`${import.meta.env.BASE_URL}journey/intro.mp4`} poster={`${import.meta.env.BASE_URL}journey/intro-poster.jpg`}
             playsInline autoPlay preload="auto" className="absolute inset-0 h-full w-full object-cover" style={{ background: P.paper }}
-            onEnded={afterIntro} onError={afterIntro} />
+            onEnded={afterIntro} onError={afterIntro} onLoadedMetadata={(e) => { const d = e.currentTarget.duration; if (isFinite(d) && d > 1) setIntroDur(d) }} />
         )}
         {ch?.kind === 'day' && <DayView plan={ch.plan} url={(p) => (p.kind === 'video' ? photoUrl(p.path) : photoUrl(p.path) ?? photoUrl(p.thumb_path))} poster={(p) => photoUrl(p.thumb_path)} videos={videos.current} />}
         {ch?.kind === 'stat' && <StatView stat={ch.stat} first={ch.first} photo={ch.stat.kind === 'person' ? face(ch.stat.m) : null} paused={paused} />}
         {ch?.kind === 'faces' && <FacesView members={trip.members.filter((x) => x.active).sort((a, b) => a.sort - b.sort)} households={trip.households} face={face} />}
-        {ch?.kind === 'finale' && <Finale photo={img(get('general').group as Img)} onAgain={() => setIdx(0)} onClose={onClose} />}
+        {ch?.kind === 'finale' && <Finale photo={img(get('general').group as Img)} onAgain={() => jump(0)} onClose={onClose} />}
       </div>
 
-      {/* אזור הנגיעות (בסיום יש כפתורים במקום) */}
-      {ch?.kind !== 'finale' && <div className="absolute inset-0 z-10" onPointerDown={down} onPointerUp={up} onPointerCancel={() => { hold.current = null; setPaused(false) }} onContextMenu={(e) => e.preventDefault()} />}
+      {/* נגיעה במסך מציגה או מסתירה את הפקדים (בסיום יש כפתורים במקום) */}
+      {ch?.kind !== 'finale' && <div className="absolute inset-0 z-10" onClick={tapScreen} onContextMenu={(e) => e.preventDefault()} />}
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 px-3 pt-[calc(var(--safe-top)+8px)]">
-        <div className="flex gap-[3px]" dir="rtl">
-          {chapters.map((_, i) => (
-            <div key={i} className="h-[3px] flex-1 overflow-hidden rounded-full" style={{ background: 'rgba(255,253,247,.35)' }}>
-              <div ref={i === idx ? fill : undefined} className="h-full rounded-full" style={{ background: P.white, width: i < idx ? '100%' : '0%' }} />
-            </div>
-          ))}
+      <div className={`absolute inset-0 z-20 transition-opacity duration-300 ${chrome || ch?.kind === 'finale' ? 'opacity-100' : 'pointer-events-none opacity-0'}`} style={{ pointerEvents: 'none' }}>
+        <div className="absolute inset-x-0 top-0 h-28" style={{ background: 'linear-gradient(rgba(22,38,63,.45), transparent)' }} />
+        <div className="absolute inset-x-0 top-0 flex items-center justify-between px-3 pt-[calc(var(--safe-top)+8px)]">
+          <span className="font-display text-[18px]" style={{ color: P.white, textShadow: '0 1px 8px rgba(0,0,0,.4)' }}>המסע ✈️</span>
+          <button className={`grid h-11 w-11 place-items-center rounded-full ${chrome || ch?.kind === 'finale' ? 'pointer-events-auto' : ''}`} style={{ background: 'rgba(22,38,63,.55)', color: P.white }} onClick={onClose} aria-label="סגור"><X size={22} /></button>
         </div>
-        <div className="mt-2 flex items-center justify-between">
-          <span className="rounded-full px-2.5 py-1 text-[13px] font-bold" style={{ background: 'rgba(22,38,63,.55)', color: P.white }}>המסע ✈️</span>
-          <div className="pointer-events-auto flex gap-2">
-            <button className="grid h-11 w-11 place-items-center rounded-full" style={{ background: 'rgba(22,38,63,.55)', color: P.white }} onClick={() => { sfxUnlock(); setSound((s) => !s) }} aria-label={sound ? 'השתק' : 'הפעל סאונד'}>
-              {sound ? <Volume2 size={20} /> : <VolumeX size={20} />}
+        {ch?.kind !== 'finale' && (
+          <>
+            <button className={`absolute left-1/2 top-1/2 grid h-[76px] w-[76px] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full ${chrome ? 'pointer-events-auto' : ''}`} style={{ background: 'rgba(22,38,63,.6)', color: P.white, backdropFilter: 'blur(6px)' }}
+              onClick={() => { sfxUnlock(); setPaused((x) => !x) }} aria-label={paused ? 'המשך' : 'השהיה'}>
+              {paused ? <Play size={34} className="ms-1" fill="currentColor" /> : <Pause size={32} fill="currentColor" />}
             </button>
-            <button className="grid h-11 w-11 place-items-center rounded-full" style={{ background: 'rgba(22,38,63,.55)', color: P.white }} onClick={onClose} aria-label="סגור"><X size={22} /></button>
-          </div>
-        </div>
+            <div className="absolute inset-x-0 bottom-0 px-4 pb-[calc(var(--safe-bottom)+14px)] pt-14" style={{ background: 'linear-gradient(transparent, rgba(22,38,63,.7))' }}>
+              <div dir="ltr" className={`relative -my-3 py-3 ${chrome ? 'pointer-events-auto' : ''}`} onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); seek((e.clientX - r.left) / r.width); poke() }} role="slider" aria-label="ציר הזמן" aria-valuemin={0} aria-valuemax={Math.round(total)} tabIndex={0}>
+                <div className="h-[4px] overflow-hidden rounded-full" style={{ background: 'rgba(255,253,247,.3)' }}>
+                  <div ref={fill} className="h-full rounded-full" style={{ background: P.lemon, width: '0%' }} />
+                </div>
+              </div>
+              <div className="mt-2 flex items-center gap-2" dir="ltr">
+                <span ref={timeLabel} className="tnum flex-1 text-[13px] font-semibold" style={{ color: P.white }}>0:00</span>
+                <button className={`grid h-11 w-11 place-items-center rounded-full ${chrome ? 'pointer-events-auto' : ''}`} style={{ color: P.white }} onClick={() => { sfxUnlock(); setSound((x) => !x); poke() }} aria-label={sound ? 'השתק' : 'הפעל סאונד'}>
+                  {sound ? <Volume2 size={22} /> : <VolumeX size={22} />}
+                </button>
+                {canFull && (
+                  <button className={`grid h-11 w-11 place-items-center rounded-full ${chrome ? 'pointer-events-auto' : ''}`} style={{ color: P.white }} onClick={() => { toggleFull(); poke() }} aria-label={full ? 'יציאה ממסך מלא' : 'מסך מלא'}>
+                    {full ? <Minimize size={22} /> : <Maximize size={22} />}
+                  </button>
+                )}
+              </div>
+            </div>
+          </>
+        )}
       </div>
-      {paused && <div className="pointer-events-none absolute inset-x-0 bottom-[calc(var(--safe-bottom)+20px)] z-20 text-center text-[14px] font-bold" style={{ color: P.white, textShadow: '0 1px 6px rgba(0,0,0,.5)' }}>בהשהיה</div>}
     </div>
   )
 }
@@ -378,7 +423,7 @@ function DayView({ plan, url, poster, videos }: { plan: DayPlan; url: (p: Photo)
   const spots = SPOTS[Math.max(1, plan.media.length)] ?? SPOTS[5]
   return (
     <div className="pointer-events-none absolute inset-0">
-      <div className="j-plate absolute inset-x-4 top-[calc(var(--safe-top)+78px)] mx-auto max-w-[440px] rounded-[22px] px-5 py-4" style={{ background: P.paper, boxShadow: '0 18px 40px -16px rgba(22,38,63,.55)', animationDelay: '1.1s' }}>
+      <div className="j-plate absolute inset-x-4 top-[calc(var(--safe-top)+66px)] mx-auto max-w-[440px] rounded-[22px] px-5 py-4" style={{ background: P.paper, boxShadow: '0 18px 40px -16px rgba(22,38,63,.55)', animationDelay: '1.1s' }}>
         <div className="flex items-center gap-2 text-[14px] font-bold" style={{ color: P.red }}>
           <span>יום {plan.n}</span><span aria-hidden>·</span><span>{weekdayLetter(plan.day.date)}</span><bdi className="tnum">{shortDate(plan.day.date)}</bdi>
         </div>

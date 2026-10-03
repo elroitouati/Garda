@@ -10,7 +10,7 @@ import { SwipeAway } from '../components/SwipeAway'
 import { Gallery } from '../components/Gallery'
 import { pickStory, Story } from '../components/Story'
 import { Wrapped, WRAPPED_FROM } from '../components/Wrapped'
-import { Journey, JOURNEY_FROM } from '../components/Journey'
+import { Journey, MASA_EVENT } from '../components/Journey'
 import { JourneyPrep } from './JourneyPrep'
 import { Welcome } from '../components/Welcome'
 import { EmergencyPhonePrompt, FridayCard, LocationConsent, LocationHelp, MeetingCard, MeetingComposer, MeetingPopup, PushCard, ShabbatScreen, TipCard, useWalkingRoute } from '../components/Live'
@@ -372,7 +372,22 @@ export function MainScreen() {
     return pickStory(photos, story.day, reactionCount)
   }, [story, photos, reactionCount])
   const wrappedOpen = t >= WRAPPED_FROM
-  const masaOpen = t >= JOURNEY_FROM
+  const [masaOpen, setMasaOpen] = useState(false)
+  useEffect(() => {
+    if (!api) return
+    const check = () => api.journeyLoad().then((d) => setMasaOpen(!!d.release?.open)).catch(() => {})
+    check()
+    const vis = () => { if (document.visibilityState === 'visible') check() }
+    const rel = (e: Event) => setMasaOpen(!!(e as CustomEvent<boolean>).detail)
+    document.addEventListener('visibilitychange', vis); window.addEventListener(MASA_EVENT, rel)
+    return () => { document.removeEventListener('visibilitychange', vis); window.removeEventListener(MASA_EVENT, rel) }
+  }, [api])
+  // ההפתעה: בפעם הראשונה אחרי השחרור, המסע נפתח לבד
+  useEffect(() => {
+    if (!masaOpen || !settled || welcome) return
+    try { if (localStorage.getItem('garda-masa-seen')) return; localStorage.setItem('garda-masa-seen', '1') } catch { return }
+    setMasa(true)
+  }, [masaOpen, settled, welcome])
   const todayCount = useMemo(() => photos.filter((p) => photoDay(p) === today).length, [photos, today])
   // הכרטיס מוסתר עד מחר אחרי החלקה הצידה
   const [storyDismissed, setStoryDismissed] = useState(false)
@@ -563,6 +578,22 @@ export function MainScreen() {
       )}
 
       <BottomSheet snap={snap} onSnap={setSnap} hidden={hidden} onSwipeRight={live.photos.length ? () => setFeed({ startId: null }) : undefined}>
+        {(masaOpen || me?.is_admin) && (
+          <div className="px-4 pb-3">
+            <button className="relative block w-full overflow-hidden rounded-3xl text-start shadow-card" style={{ background: '#16263F' }} onClick={() => { unlockAudio(); setMasa(true) }}>
+              <img src={`${import.meta.env.BASE_URL}journey/intro-poster.jpg`} alt="" className="absolute inset-0 h-full w-full object-cover opacity-55" style={{ objectPosition: '50% 30%' }} />
+              <span className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(22,38,63,.95) 15%, rgba(22,38,63,.25))' }} />
+              <span className="relative flex min-h-[148px] items-end gap-3 p-4 text-[#FAF5EA]">
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13px] font-bold text-[#F2C230]">{masaOpen ? 'חדש · כל הטיול בסרט אחד' : 'תצוגה מקדימה · רק מנהלים רואים'}</span>
+                  <span className="block font-display text-[30px] leading-[1.15]">המסע ✈️</span>
+                  <span className="block text-[14px] opacity-85">מההמראה, יום אחרי יום על המפה, ועד התמונה המשותפת</span>
+                </span>
+                <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-[#D34838] shadow-float"><Play size={26} className="ms-0.5 fill-white text-white" /></span>
+              </span>
+            </button>
+          </div>
+        )}
         <NowRow list={list} t={t} onPlace={focusPlace} />
         {phase === 'friday' && <FridayCard />}
         {meeting && (

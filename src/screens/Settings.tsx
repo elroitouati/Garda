@@ -1,5 +1,5 @@
-import { Camera, ChevronLeft, LogOut, Plane, Play, RefreshCw, Share, Smartphone, SquarePlus, UserCog, Users } from 'lucide-react'
-import { useState } from 'react'
+import { Camera, ChevronLeft, Check, LogOut, Plane, Play, Rocket, RefreshCw, Share, Smartphone, SquarePlus, UserCog, Users } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { Avatar } from '../components/Avatar'
 import { Overlay } from '../components/Overlay'
 import { useToast } from '../components/Toast'
@@ -7,7 +7,7 @@ import { groupByHousehold } from '../lib/members'
 import { useStore } from '../lib/store'
 import { Admin } from './Admin'
 import { JourneyPrep } from './JourneyPrep'
-import { Journey } from '../components/Journey'
+import { Journey, MASA_EVENT } from '../components/Journey'
 import { AvatarSetup } from './AvatarSetup'
 
 export function Settings({ onClose }: { onClose: () => void }) {
@@ -15,6 +15,23 @@ export function Settings({ onClose }: { onClose: () => void }) {
   const toast = useToast()
   const [view, setView] = useState<'main' | 'switch' | 'photo' | 'admin' | 'install' | 'journey' | 'masa'>('main')
   const [busy, setBusy] = useState(false)
+  // שחרור "המסע" לכולם: לחיצה ראשונה מבקשת אישור, שנייה משחררת ושולחת התראה
+  const [released, setReleased] = useState<boolean | null>(null)
+  const [arm, setArm] = useState(false)
+  useEffect(() => { if (me?.is_admin) api?.journeyLoad().then((d) => setReleased(!!d.release?.open)).catch(() => {}) }, [api, me?.is_admin])
+  useEffect(() => { if (!arm) return; const t = window.setTimeout(() => setArm(false), 4000); return () => clearTimeout(t) }, [arm])
+  const release = async () => {
+    if (!api || !me) return
+    if (!arm) { setArm(true); return }
+    setArm(false)
+    try {
+      await api.journeySave('release', { open: true, at: new Date().toISOString() }, me.id)
+      setReleased(true)
+      try { localStorage.setItem('garda-masa-seen', '1') } catch { /* ignore */ }
+      window.dispatchEvent(new CustomEvent(MASA_EVENT, { detail: true }))
+      toast('המסע שוחרר! כולם מקבלים התראה ✈️')
+    } catch { toast('השחרור נכשל. בדוק קליטה.') }
+  }
   if (!me || !data) return null
   const household = data.households.find((h) => h.id === me.household_id)
 
@@ -100,7 +117,13 @@ export function Settings({ onClose }: { onClose: () => void }) {
         <Row icon={<Smartphone size={20} />} label="הוספה למסך הבית" onClick={() => setView('install')} />
         {me.is_admin && <Row icon={<UserCog size={20} />} label="ניהול הטיול" onClick={() => setView('admin')} />}
         {me.is_admin && <Row icon={<Plane size={20} />} label="חומרים למסע ✈️" onClick={() => setView('journey')} />}
-        {me.is_admin && <Row icon={<Play size={20} />} label="צפייה במסע (תצוגה מקדימה)" onClick={() => setView('masa')} />}
+        {me.is_admin && <Row icon={<Play size={20} />} label={released ? 'צפייה במסע' : 'צפייה במסע (תצוגה מקדימה)'} onClick={() => setView('masa')} />}
+        {me.is_admin && released === false && (
+          <button className={`flex min-h-[56px] w-full items-center gap-3 px-4 text-start text-[17px] font-bold ${arm ? 'bg-terra text-white' : 'text-terra'}`} onClick={release}>
+            <Rocket size={20} /><span className="flex-1">{arm ? 'בטוח? לחץ שוב וכולם יקבלו את המסע' : 'שחרר את המסע לכולם 🚀'}</span>
+          </button>
+        )}
+        {me.is_admin && released && <div className="flex min-h-[48px] items-center gap-3 px-4 text-[15px] font-semibold text-green"><Check size={18} /> המסע פתוח לכולם</div>}
         <Row icon={<RefreshCw size={20} />} label={offline ? 'רענן נתונים (אין קליטה)' : 'רענן נתונים'} onClick={async () => { await refresh(); toast('הנתונים עודכנו') }} />
       </div>
       <div className="mx-4 mt-4 overflow-hidden rounded-3xl bg-surface shadow-card">

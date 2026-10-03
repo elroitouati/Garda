@@ -85,12 +85,15 @@ Deno.serve(async (req) => {
     const since = new Date(Date.now() - 30 * 3600_000).toISOString()
     const { data: ph = [] } = await sb.from('photos').select('id,kind,taken_at').gte('taken_at', since)
     const todays = (ph as { kind: string; taken_at: string }[]).filter((p) => romeDay(new Date(p.taken_at)) === today)
-    if (!todays.length && today !== '2026-10-04') return new Response('nothing today')
+    if (!todays.length) return new Response('nothing today')
     const v = todays.filter((p) => p.kind === 'video').length, n = todays.length - v
     const parts = [n && (n === 1 ? 'תמונה אחת' : `${n} תמונות`), v && (v === 1 ? 'סרטון אחד' : `${v} סרטונים`)].filter(Boolean).join(' ו')
     to = people.map((x) => x.id)
-    if (today === '2026-10-04') payload = { title: 'המסע מוכן ✈️', body: 'כל הטיול על המפה: מההמראה, יום אחרי יום, ועד התמונה המשותפת', tag: 'masa', important: false, url: `${APP_URL}?masa=1` }
-    else payload = { title: 'הסיפור של היום מוכן ✨', body: `${parts} מהיום. בואו לראות את הרגעים הכי אהובים`, tag: `daily-${today}`, important: false, url: `${APP_URL}?story=${today}` }
+    payload = { title: 'הסיפור של היום מוכן ✨', body: `${parts} מהיום. בואו לראות את הרגעים הכי אהובים`, tag: `daily-${today}`, important: false, url: `${APP_URL}?story=${today}` }
+  } else if (kind === 'masa') {
+    // מנהל שחרר את "המסע" לכולם
+    to = people.map((x) => x.id)
+    payload = { title: 'המסע מוכן ✈️', body: 'כל הטיול בסרט אחד: מההמראה, יום אחרי יום, ועד התמונה המשותפת', tag: 'masa', important: true, url: `${APP_URL}?masa=1` }
   } else return new Response('unknown kind', { status: 400 })
 
   if (!to.length) return new Response('nobody')
