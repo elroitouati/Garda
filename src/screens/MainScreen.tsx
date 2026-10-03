@@ -760,7 +760,7 @@ export function MainScreen() {
       {story && storyPhotos.length > 0 && <Story day={story.day} photos={storyPhotos} onClose={() => setStory(null)} onFeed={() => { setStory(null); setFeed({ startId: null }) }} />}
       {journey && <JourneyPrep onClose={() => setJourney(false)} />}
       {endMode && (
-        <EndScreen watched={watched} started={started}
+        <EndScreen watched={watched} started={started} faces={data.members.filter((m) => m.active).sort((x, y) => x.sort - y.sort).map((m) => avatarUrl(m)).filter((u): u is string => !!u)}
           onPlay={() => { unlockAudio(); setStarted(true); setFlag('garda-masa-started'); setMasa(true) }}
           onSkip={() => { setWatched(true); setFlag('garda-masa-watched') }}
           onApp={me?.is_admin ? () => setEndBypass(true) : undefined}
