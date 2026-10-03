@@ -10,7 +10,8 @@ import { SwipeAway } from '../components/SwipeAway'
 import { Gallery } from '../components/Gallery'
 import { pickStory, Story } from '../components/Story'
 import { Wrapped, WRAPPED_FROM } from '../components/Wrapped'
-import { Journey, MASA_EVENT } from '../components/Journey'
+import { Journey, MASA_EVENT, readMasa, type MasaState } from '../components/Journey'
+import { EndScreen } from '../components/EndScreen'
 import { JourneyPrep } from './JourneyPrep'
 import { Welcome } from '../components/Welcome'
 import { EmergencyPhonePrompt, FridayCard, LocationConsent, LocationHelp, MeetingCard, MeetingComposer, MeetingPopup, PushCard, ShabbatScreen, TipCard, useWalkingRoute } from '../components/Live'
@@ -372,22 +373,30 @@ export function MainScreen() {
     return pickStory(photos, story.day, reactionCount)
   }, [story, photos, reactionCount])
   const wrappedOpen = t >= WRAPPED_FROM
-  const [masaOpen, setMasaOpen] = useState(false)
+  const [masaState, setMasaState] = useState<MasaState>({ open: false, end: false })
+  const masaOpen = masaState.open
+  // מסך הסיום: קודם הסרט, ואחריו האלבום המלא. מנהל יכול לצאת לאפליקציה
+  const [endBypass, setEndBypass] = useState(false)
+  const flag = (k: string) => { try { return localStorage.getItem(k) === '1' } catch { return false } }
+  const setFlag = (k: string) => { try { localStorage.setItem(k, '1') } catch { /* ignore */ } }
+  const [watched, setWatched] = useState(() => flag('garda-masa-watched'))
+  const [started, setStarted] = useState(() => flag('garda-masa-started'))
+  const endMode = masaState.end && !endBypass
   useEffect(() => {
     if (!api) return
-    const check = () => api.journeyLoad().then((d) => setMasaOpen(!!d.release?.open)).catch(() => {})
+    const check = () => api.journeyLoad().then((d) => setMasaState(readMasa(d))).catch(() => {})
     check()
     const vis = () => { if (document.visibilityState === 'visible') check() }
-    const rel = (e: Event) => setMasaOpen(!!(e as CustomEvent<boolean>).detail)
+    const rel = (e: Event) => setMasaState((e as CustomEvent<MasaState>).detail)
     document.addEventListener('visibilitychange', vis); window.addEventListener(MASA_EVENT, rel)
     return () => { document.removeEventListener('visibilitychange', vis); window.removeEventListener(MASA_EVENT, rel) }
   }, [api])
   // ההפתעה: בפעם הראשונה אחרי השחרור, המסע נפתח לבד
   useEffect(() => {
-    if (!masaOpen || !settled || welcome) return
+    if (!masaOpen || masaState.end || !settled || welcome) return
     try { if (localStorage.getItem('garda-masa-seen')) return; localStorage.setItem('garda-masa-seen', '1') } catch { return }
     setMasa(true)
-  }, [masaOpen, settled, welcome])
+  }, [masaOpen, masaState.end, settled, welcome])
   const todayCount = useMemo(() => photos.filter((p) => photoDay(p) === today).length, [photos, today])
   // הכרטיס מוסתר עד מחר אחרי החלקה הצידה
   const [storyDismissed, setStoryDismissed] = useState(false)
@@ -696,7 +705,7 @@ export function MainScreen() {
         </div>
       </BottomSheet>
 
-      {welcome && (
+      {welcome && !endMode && (
         <Welcome full={welcome === 'full'} onDone={closeWelcome} onLeave={playIntro} onLocation={(share) => {
           if (share) { navigator.geolocation?.getCurrentPosition(() => {}, () => {}, { enableHighAccuracy: true, timeout: 20000 }); loc.setConsent('yes') }
           else loc.setConsent('no')
@@ -750,7 +759,15 @@ export function MainScreen() {
       {feed && <Feed startId={feed.startId} onClose={() => setFeed(null)} />}
       {story && storyPhotos.length > 0 && <Story day={story.day} photos={storyPhotos} onClose={() => setStory(null)} onFeed={() => { setStory(null); setFeed({ startId: null }) }} />}
       {journey && <JourneyPrep onClose={() => setJourney(false)} />}
-      {masa && <Journey onClose={() => setMasa(false)} />}
+      {endMode && (
+        <EndScreen watched={watched} started={started}
+          onPlay={() => { unlockAudio(); setStarted(true); setFlag('garda-masa-started'); setMasa(true) }}
+          onSkip={() => { setWatched(true); setFlag('garda-masa-watched') }}
+          onApp={me?.is_admin ? () => setEndBypass(true) : undefined}
+          album={<AlbumTab onOpen={(ids, st) => setGallery({ ids, start: st })} onSlideshow={(ids) => { const f = photos.find((p) => p.id === ids[0]); if (f) setStory({ day: photoDay(f), ids }) }} onAdd={() => setCameraMenu(true)} onFeed={() => setFeed({ startId: null })}
+            onWrapped={() => setWrapped(true)} wrappedPreview={false} />} />
+      )}
+      {masa && <Journey onClose={() => setMasa(false)} endLabel={endMode ? 'לאלבום המלא 📸' : undefined} onFinale={() => { setWatched(true); setFlag('garda-masa-watched') }} />}
       {wrapped && <Wrapped preview={!wrappedOpen} onClose={() => setWrapped(false)} />}
       {overlay === 'settings' && <Settings onClose={() => setOverlay(null)} />}
       {overlay === 'emergency' && <EmergencyCard onClose={() => setOverlay(null)} />}

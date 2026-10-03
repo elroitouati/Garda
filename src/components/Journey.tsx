@@ -11,6 +11,9 @@ import { STYLE } from './MapView'
 
 /** "המסע" נפתח לכולם כשמנהל משחרר אותו (journey.key = 'release'); עד אז רק מנהלים רואים */
 export const MASA_EVENT = 'garda-masa-release'
+/** מה כולם רואים: open = הסרט פתוח לכולם, end = מסך סיום (סרט ואז אלבום) */
+export type MasaState = { open: boolean; end: boolean }
+export const readMasa = (d: Record<string, Record<string, unknown>>): MasaState => ({ open: !!d.release?.open, end: !!d.release?.end })
 
 type LngLat = [number, number]
 type Img = { id?: string; path?: string } | null
@@ -97,7 +100,7 @@ function styleMap(map: maplibregl.Map) {
   map.addLayer({ id: 'j-stops', type: 'circle', source: 'j-stops', paint: { 'circle-radius': 7, 'circle-color': P.red, 'circle-stroke-color': P.white, 'circle-stroke-width': 3 } })
 }
 
-export function Journey({ onClose }: { onClose: () => void }) {
+export function Journey({ onClose, onFinale, endLabel }: { onClose: () => void; onFinale?: () => void; endLabel?: string }) {
   const { data: trip, live, api, photoUrl, signPhotos, avatarUrl } = useStore()
   const [jd, setJd] = useState<Record<string, Record<string, unknown>> | null>(null)
   useEffect(() => { api?.journeyLoad().then(setJd).catch(() => setJd({})) }, [api])
@@ -332,6 +335,7 @@ export function Journey({ onClose }: { onClose: () => void }) {
     } else {
       durRef.current = Infinity
       cues.current = [{ at: 0.4, run: () => sfx.chime() }]
+      onFinale?.()
       if (m) { m.stop(); setRoute(routeUntil(plans.length), plans.map((p) => p.path[p.path.length - 1]).filter(Boolean)) }
     }
     return () => { cancelAnimationFrame(anim); m?.stop() }
@@ -375,7 +379,7 @@ export function Journey({ onClose }: { onClose: () => void }) {
         {ch?.kind === 'day' && <DayView plan={ch.plan} url={(p) => (p.kind === 'video' ? photoUrl(p.path) : photoUrl(p.path) ?? photoUrl(p.thumb_path))} poster={(p) => photoUrl(p.thumb_path)} videos={videos.current} />}
         {ch?.kind === 'stat' && <StatView stat={ch.stat} first={ch.first} photo={ch.stat.kind === 'person' ? face(ch.stat.m) : null} paused={paused} />}
         {ch?.kind === 'faces' && <FacesView members={trip.members.filter((x) => x.active).sort((a, b) => a.sort - b.sort)} households={trip.households} face={face} />}
-        {ch?.kind === 'finale' && <Finale photo={img(get('general').group as Img)} onAgain={() => jump(0)} onClose={onClose} />}
+        {ch?.kind === 'finale' && <Finale photo={img(get('general').group as Img)} onAgain={() => jump(0)} onClose={onClose} endLabel={endLabel} />}
       </div>
 
       {/* נגיעה במסך מציגה או מסתירה את הפקדים (בסיום יש כפתורים במקום) */}
@@ -557,7 +561,7 @@ function FacesView({ members, households, face }: { members: Member[]; household
   )
 }
 
-function Finale({ photo, onAgain, onClose }: { photo: string | null; onAgain: () => void; onClose: () => void }) {
+function Finale({ photo, onAgain, onClose, endLabel }: { photo: string | null; onAgain: () => void; onClose: () => void; endLabel?: string }) {
   return (
     <div className="absolute inset-0 overflow-hidden" style={{ background: P.ink }}>
       {photo && <img src={photo} alt="התמונה הקבוצתית" className="j-kenburns absolute inset-0 h-full w-full object-cover" />}
@@ -568,7 +572,7 @@ function Finale({ photo, onAgain, onClose }: { photo: string | null; onAgain: ()
         <p className="j-rise mt-3 text-[20px] font-bold" style={{ animationDelay: '1s' }}>עד הטיול הבא ❤️</p>
         <div className="j-rise mt-6 flex w-full max-w-[360px] gap-3" style={{ animationDelay: '1.3s' }}>
           <button className="flex min-h-[50px] flex-1 items-center justify-center gap-2 rounded-2xl text-[17px] font-bold" style={{ background: P.paper, color: P.ink }} onClick={onAgain}><RotateCcw size={18} /> לצפות שוב</button>
-          <button className="min-h-[50px] flex-1 rounded-2xl text-[17px] font-bold" style={{ background: 'rgba(250,245,234,.16)', color: P.paper, boxShadow: 'inset 0 0 0 1.5px rgba(250,245,234,.4)' }} onClick={onClose}>סגירה</button>
+          <button className="min-h-[50px] flex-1 rounded-2xl text-[17px] font-bold" style={{ background: 'rgba(250,245,234,.16)', color: P.paper, boxShadow: 'inset 0 0 0 1.5px rgba(250,245,234,.4)' }} onClick={onClose}>{endLabel ?? 'סגירה'}</button>
         </div>
       </div>
     </div>

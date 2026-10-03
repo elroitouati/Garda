@@ -1,4 +1,4 @@
-import { Camera, ChevronLeft, Check, LogOut, Plane, Play, Rocket, RefreshCw, Share, Smartphone, SquarePlus, UserCog, Users } from 'lucide-react'
+import { Camera, ChevronLeft, Check, LogOut, Plane, Play, RefreshCw, Share, Smartphone, SquarePlus, UserCog, Users } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Avatar } from '../components/Avatar'
 import { Overlay } from '../components/Overlay'
@@ -7,7 +7,14 @@ import { groupByHousehold } from '../lib/members'
 import { useStore } from '../lib/store'
 import { Admin } from './Admin'
 import { JourneyPrep } from './JourneyPrep'
-import { Journey, MASA_EVENT } from '../components/Journey'
+import { Journey, MASA_EVENT, readMasa, type MasaState } from '../components/Journey'
+
+type Mode = 'locked' | 'open' | 'end'
+const MODES: [Mode, string, string][] = [
+  ['locked', 'האפליקציה הרגילה', 'הסרט נעול, רק מנהלים רואים אותו'],
+  ['open', 'האפליקציה + הסרט', 'כולם מקבלים התראה והסרט נפתח להם פעם אחת'],
+  ['end', 'מסך סיום 🎬', '"הכנו לכם סרטון", צופים, ואחר כך האלבום המלא'],
+]
 import { AvatarSetup } from './AvatarSetup'
 
 export function Settings({ onClose }: { onClose: () => void }) {
@@ -15,22 +22,24 @@ export function Settings({ onClose }: { onClose: () => void }) {
   const toast = useToast()
   const [view, setView] = useState<'main' | 'switch' | 'photo' | 'admin' | 'install' | 'journey' | 'masa'>('main')
   const [busy, setBusy] = useState(false)
-  // שחרור "המסע" לכולם: לחיצה ראשונה מבקשת אישור, שנייה משחררת ושולחת התראה
-  const [released, setReleased] = useState<boolean | null>(null)
-  const [arm, setArm] = useState(false)
-  useEffect(() => { if (me?.is_admin) api?.journeyLoad().then((d) => setReleased(!!d.release?.open)).catch(() => {}) }, [api, me?.is_admin])
-  useEffect(() => { if (!arm) return; const t = window.setTimeout(() => setArm(false), 4000); return () => clearTimeout(t) }, [arm])
-  const release = async () => {
-    if (!api || !me) return
-    if (!arm) { setArm(true); return }
-    setArm(false)
+  // מה כולם רואים: נעול / אפליקציה + הסרט / מסך סיום. בחירה מבקשת לחיצה שנייה לאישור
+  const [masa, setMasa] = useState<MasaState | null>(null)
+  const [arm, setArm] = useState<Mode | null>(null)
+  useEffect(() => { if (me?.is_admin) api?.journeyLoad().then((d) => setMasa(readMasa(d))).catch(() => {}) }, [api, me?.is_admin])
+  useEffect(() => { if (!arm) return; const t = window.setTimeout(() => setArm(null), 4000); return () => clearTimeout(t) }, [arm])
+  const mode: Mode | null = masa ? (masa.end ? 'end' : masa.open ? 'open' : 'locked') : null
+  const choose = async (m: Mode) => {
+    if (!api || !me || m === mode) return
+    if (arm !== m) { setArm(m); return }
+    setArm(null)
+    const next: MasaState = { open: m !== 'locked', end: m === 'end' }
     try {
-      await api.journeySave('release', { open: true, at: new Date().toISOString() }, me.id)
-      setReleased(true)
+      await api.journeySave('release', { ...next, at: new Date().toISOString() }, me.id)
+      setMasa(next)
       try { localStorage.setItem('garda-masa-seen', '1') } catch { /* ignore */ }
-      window.dispatchEvent(new CustomEvent(MASA_EVENT, { detail: true }))
-      toast('המסע שוחרר! כולם מקבלים התראה ✈️')
-    } catch { toast('השחרור נכשל. בדוק קליטה.') }
+      window.dispatchEvent(new CustomEvent(MASA_EVENT, { detail: next }))
+      toast(m === 'locked' ? 'המסע נעול שוב' : !masa?.open ? 'שוחרר! כולם מקבלים התראה ✈️' : 'עודכן לכולם')
+    } catch { toast('לא הצלחתי לעדכן. בדוק קליטה.') }
   }
   if (!me || !data) return null
   const household = data.households.find((h) => h.id === me.household_id)
@@ -117,13 +126,24 @@ export function Settings({ onClose }: { onClose: () => void }) {
         <Row icon={<Smartphone size={20} />} label="הוספה למסך הבית" onClick={() => setView('install')} />
         {me.is_admin && <Row icon={<UserCog size={20} />} label="ניהול הטיול" onClick={() => setView('admin')} />}
         {me.is_admin && <Row icon={<Plane size={20} />} label="חומרים למסע ✈️" onClick={() => setView('journey')} />}
-        {me.is_admin && <Row icon={<Play size={20} />} label={released ? 'צפייה במסע' : 'צפייה במסע (תצוגה מקדימה)'} onClick={() => setView('masa')} />}
-        {me.is_admin && released === false && (
-          <button className={`flex min-h-[56px] w-full items-center gap-3 px-4 text-start text-[17px] font-bold ${arm ? 'bg-terra text-white' : 'text-terra'}`} onClick={release}>
-            <Rocket size={20} /><span className="flex-1">{arm ? 'בטוח? לחץ שוב וכולם יקבלו את המסע' : 'שחרר את המסע לכולם 🚀'}</span>
-          </button>
+        {me.is_admin && <Row icon={<Play size={20} />} label="צפייה במסע" onClick={() => setView('masa')} />}
+        {me.is_admin && mode && (
+          <div className="border-t border-line px-4 py-3">
+            <div className="mb-2 text-[14px] font-bold text-muted">מה כולם רואים כשהם פותחים את האפליקציה?</div>
+            <div className="flex flex-col gap-2" role="radiogroup" aria-label="מה כולם רואים">
+              {MODES.map(([k, title, sub]) => (
+                <button key={k} role="radio" aria-checked={mode === k} onClick={() => choose(k)}
+                  className={`flex min-h-[56px] items-center gap-3 rounded-2xl px-3 text-start ${arm === k ? 'bg-terra text-white' : mode === k ? 'bg-greenSoft ring-2 ring-green' : 'bg-surface2'}`}>
+                  <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 ${mode === k ? 'border-green bg-green text-white' : arm === k ? 'border-white' : 'border-line'}`}>{mode === k && <Check size={14} />}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[16px] font-bold">{arm === k ? 'לחץ שוב לאישור' : title}</span>
+                    <span className={`block text-[13px] ${arm === k ? 'text-white/90' : 'text-muted'}`}>{sub}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
         )}
-        {me.is_admin && released && <div className="flex min-h-[48px] items-center gap-3 px-4 text-[15px] font-semibold text-green"><Check size={18} /> המסע פתוח לכולם</div>}
         <Row icon={<RefreshCw size={20} />} label={offline ? 'רענן נתונים (אין קליטה)' : 'רענן נתונים'} onClick={async () => { await refresh(); toast('הנתונים עודכנו') }} />
       </div>
       <div className="mx-4 mt-4 overflow-hidden rounded-3xl bg-surface shadow-card">
