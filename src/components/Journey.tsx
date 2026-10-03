@@ -2,7 +2,7 @@ import * as maplibregl from 'maplibre-gl'
 import { Maximize, Minimize, Pause, Play, RotateCcw, Volume2, VolumeX, X } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { distance } from '../lib/geo'
-import { sfx, sfxEnable, sfxUnlock } from '../lib/sfx'
+import { musicLevel, musicStart, musicStop, sfx, sfxEnable, sfxUnlock } from '../lib/sfx'
 import { useStore } from '../lib/store'
 import { shortDate, weekdayLetter } from '../lib/time'
 import type { Day, Member, Photo } from '../lib/types'
@@ -49,6 +49,8 @@ const dayDur = (plan: DayPlan) => {
 }
 const statDur = (s: Stat) => (s.kind === 'endless' ? 5 : 3.4)
 const FACES = 5.5, FINALE = 6
+const MUSIC = `${import.meta.env.BASE_URL}journey/music.mp3`
+const BED = 0.42 // עוצמת המוזיקה מתחת לסרט
 const clock = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
 
 const ll = (p: LngLat) => ({ lng: p[0], lat: p[1] })
@@ -248,7 +250,7 @@ export function Journey({ onClose, onFinale, endLabel }: { onClose: () => void; 
   const toggleFull = () => { if (document.fullscreenElement) void document.exitFullscreen().catch(() => {}); else void root.current?.requestFullscreen({ navigationUI: 'hide' }).catch(() => {}) }
   useEffect(() => () => { if (document.fullscreenElement) void document.exitFullscreen().catch(() => {}) }, [])
 
-  useEffect(() => { sfxUnlock(); return () => sfxEnable(true) }, [])
+  useEffect(() => { sfxUnlock(); return () => { musicStop(); sfxEnable(true) } }, [])
   useEffect(() => { sfxEnable(sound); videos.current.forEach((v) => { v.muted = !sound }) }, [sound])
 
   useEffect(() => {
@@ -288,6 +290,8 @@ export function Journey({ onClose, onFinale, endLabel }: { onClose: () => void; 
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     let anim = 0
     if (!ch) return
+    // המוזיקה נכנסת אחרי הפתיח (שיש לו סאונד משלו) וממשיכה עד הסוף
+    if (ch.kind === 'intro') musicLevel(0, 0.6); else if (!pausedRef.current) musicStart(MUSIC, BED)
     if (ch.kind === 'intro') { durRef.current = Infinity; cues.current = [] }
     else if (ch.kind === 'day') {
       const { plan } = ch
@@ -323,7 +327,7 @@ export function Journey({ onClose, onFinale, endLabel }: { onClose: () => void; 
         ...plan.media.map((p, k) => ({ at: DROP + k * GAP, run: () => {
           sfx.pop(k % 2 === 1)
           const v = videos.current.get(p.id)
-          if (v) { v.muted = !sound; v.currentTime = 0; void v.play().catch(() => { v.muted = true; void v.play().catch(() => {}) }) }
+          if (v) { v.muted = !sound; v.currentTime = 0; if (sound) musicLevel(0.1, 0.6); void v.play().catch(() => { v.muted = true; musicLevel(BED); void v.play().catch(() => {}) }) }
         } })),
       ]
     } else if (ch.kind === 'stat') {
@@ -351,6 +355,7 @@ export function Journey({ onClose, onFinale, endLabel }: { onClose: () => void; 
     if (ch?.kind !== 'day') return
     videos.current.forEach((v) => { if (paused) v.pause(); else if (v.currentTime > 0 && !v.ended) void v.play().catch(() => {}) })
   }, [paused, ch])
+  useEffect(() => { if (ch?.kind === 'intro') return; if (paused) musicLevel(0, 0.4); else musicStart(MUSIC, BED) }, [paused]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── שליטה כמו בסרט: נגיעה מציגה/מסתירה פקדים, החצים מדלגים ──
   const tapScreen = () => { if (chrome && !paused) { clearTimeout(hideT.current); setChrome(false) } else poke() }
@@ -443,7 +448,7 @@ function DayView({ plan, url, poster, videos }: { plan: DayPlan; url: (p: Photo)
               <div className="rounded-[6px] p-[6px] pb-[24px]" style={{ background: P.white, boxShadow: '0 22px 44px -14px rgba(0,0,0,.6)' }}>
                 <div className="relative aspect-[4/5] overflow-hidden rounded-[3px]" style={{ background: '#E9E1CF' }}>
                   {p.kind === 'video'
-                    ? <video ref={(v) => { if (v) videos.set(p.id, v); else videos.delete(p.id) }} src={u ?? undefined} poster={poster(p) ?? undefined} playsInline muted preload="auto" className="absolute inset-0 h-full w-full object-cover" />
+                    ? <video ref={(v) => { if (v) videos.set(p.id, v); else videos.delete(p.id) }} src={u ?? undefined} poster={poster(p) ?? undefined} playsInline muted preload="auto" onEnded={() => musicLevel(BED)} className="absolute inset-0 h-full w-full object-cover" />
                     : u && <img src={u} alt="" className="absolute inset-0 h-full w-full object-cover" draggable={false} />}
                 </div>
               </div>

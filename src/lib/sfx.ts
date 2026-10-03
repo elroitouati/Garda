@@ -2,7 +2,7 @@
 let ctx: AudioContext | null = null
 let on = true
 
-export function sfxEnable(v: boolean) { on = v }
+export function sfxEnable(v: boolean) { on = v; ramp(0.3) }
 /** חייב לקרות בתוך לחיצה של המשתמש, אחרת הדפדפן חוסם */
 export function sfxUnlock() {
   try {
@@ -55,4 +55,37 @@ export const sfx = {
   thud: () => { tone(150, 0.25, 0.4, 'sine', 0.5); noise(0.18, 0.12, 900, 200) },
   chime: () => { tone(1046, 0.9, 0.16); tone(1318, 0.9, 0.12, 'sine', 1, 0.09); tone(1568, 1.1, 0.1, 'sine', 1, 0.18) },
   slam: () => { tone(98, 0.4, 0.45, 'triangle', 0.6); noise(0.25, 0.2, 1800, 300) },
+}
+
+// ── מוזיקת רקע רגועה לסרט (לופ), עם עוצמה שאפשר להנמיך כשסרטון מדבר ──
+let music: { src: AudioBufferSourceNode; gain: GainNode } | null = null
+let level = 0
+let loading: Promise<void> | null = null
+let wanted = false
+const ramp = (secs: number) => {
+  if (!music || !ctx) return
+  const g = music.gain.gain, t = ctx.currentTime
+  g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(on ? level : 0, t + secs)
+}
+export function musicStart(url: string, to = 0.5) {
+  level = to; wanted = true
+  if (music) { ramp(2.5); return }
+  if (loading || !ctx) return
+  const c = ctx
+  loading = fetch(url).then((r) => r.arrayBuffer()).then((b) => c.decodeAudioData(b)).then((buf) => {
+    if (music || !wanted) return
+    const src = c.createBufferSource(); src.buffer = buf; src.loop = true
+    const gain = c.createGain(); gain.gain.value = 0
+    src.connect(gain); gain.connect(c.destination); src.start()
+    music = { src, gain }
+    ramp(3)
+  }).catch(() => {}).finally(() => { loading = null })
+}
+export function musicLevel(to: number, secs = 0.8) { level = to; ramp(secs) }
+export function musicStop(secs = 1.2) {
+  const m = music; music = null; level = 0; wanted = false
+  if (!m || !ctx) return
+  const t = ctx.currentTime
+  m.gain.gain.cancelScheduledValues(t); m.gain.gain.setValueAtTime(m.gain.gain.value, t); m.gain.gain.linearRampToValueAtTime(0, t + secs)
+  m.src.stop(t + secs + 0.05)
 }
