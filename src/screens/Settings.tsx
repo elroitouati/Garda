@@ -1,4 +1,4 @@
-import { Camera, ChevronLeft, LogOut, Plane, RefreshCw, Share, Smartphone, SquarePlus, UserCog, Users } from 'lucide-react'
+import { Camera, ChevronLeft, LogOut, Plane, Play, RefreshCw, Share, Smartphone, SquarePlus, UserCog, Users } from 'lucide-react'
 import { useState } from 'react'
 import { Avatar } from '../components/Avatar'
 import { Overlay } from '../components/Overlay'
@@ -7,12 +7,13 @@ import { groupByHousehold } from '../lib/members'
 import { useStore } from '../lib/store'
 import { Admin } from './Admin'
 import { JourneyPrep } from './JourneyPrep'
+import { Journey } from '../components/Journey'
 import { AvatarSetup } from './AvatarSetup'
 
 export function Settings({ onClose }: { onClose: () => void }) {
   const { me, data, api, enter, leave, refresh, offline } = useStore()
   const toast = useToast()
-  const [view, setView] = useState<'main' | 'switch' | 'photo' | 'admin' | 'install' | 'journey'>('main')
+  const [view, setView] = useState<'main' | 'switch' | 'photo' | 'admin' | 'install' | 'journey' | 'masa'>('main')
   const [busy, setBusy] = useState(false)
   if (!me || !data) return null
   const household = data.households.find((h) => h.id === me.household_id)
@@ -20,6 +21,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
   if (view === 'photo') return <AvatarSetup member={me} title="תמונת פרופיל" onDone={() => setView('main')} onSkip={() => setView('main')} />
   if (view === 'admin') return <Admin onClose={() => setView('main')} />
   if (view === 'journey') return <JourneyPrep onClose={() => setView('main')} />
+  if (view === 'masa') return <Journey onClose={() => setView('main')} />
 
   if (view === 'switch') {
     return (
@@ -98,6 +100,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
         <Row icon={<Smartphone size={20} />} label="הוספה למסך הבית" onClick={() => setView('install')} />
         {me.is_admin && <Row icon={<UserCog size={20} />} label="ניהול הטיול" onClick={() => setView('admin')} />}
         {me.is_admin && <Row icon={<Plane size={20} />} label="חומרים למסע ✈️" onClick={() => setView('journey')} />}
+        {me.is_admin && <Row icon={<Play size={20} />} label="צפייה במסע (תצוגה מקדימה)" onClick={() => setView('masa')} />}
         <Row icon={<RefreshCw size={20} />} label={offline ? 'רענן נתונים (אין קליטה)' : 'רענן נתונים'} onClick={async () => { await refresh(); toast('הנתונים עודכנו') }} />
       </div>
       <div className="mx-4 mt-4 overflow-hidden rounded-3xl bg-surface shadow-card">

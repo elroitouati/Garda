@@ -30,12 +30,14 @@ export function useLikeCounts() {
   }, [live.likes])
 }
 
-export function AlbumTab({ onOpen, onSlideshow, onAdd, onFeed, onWrapped, wrappedPreview }: {
+export function AlbumTab({ onOpen, onSlideshow, onAdd, onFeed, onWrapped, wrappedPreview, onMasa, masaPreview }: {
   onOpen: (ids: string[], start: number) => void
   onSlideshow: (ids: string[]) => void
   onAdd: () => void
   onFeed: () => void
   onWrapped?: () => void
+  onMasa?: () => void
+  masaPreview?: boolean
   wrappedPreview?: boolean
 }) {
   const { live, data, photoUrl, api, me, refreshLive } = useStore()
@@ -93,6 +95,15 @@ export function AlbumTab({ onOpen, onSlideshow, onAdd, onFeed, onWrapped, wrappe
         <button className="btn-ghost text-lg" onClick={onFeed}><Clapperboard size={20} /> גלילה</button>
       </div>
       <p className="-mt-1 px-4 pb-2 text-center text-[13px] text-muted">טיפ: במסך מלא, החלקה ימינה פותחת את הגלילה</p>
+      {onMasa && (
+        <div className="px-4 pb-2">
+          <button className="relative flex w-full items-center gap-3 overflow-hidden rounded-2xl bg-[#16263F] p-3.5 text-start text-[#FAF5EA] shadow-card" onClick={onMasa}>
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[#F2C230] text-[22px]" aria-hidden>✈️</span>
+            <span className="flex-1"><span className="block font-display text-[19px] leading-tight">המסע</span><span className="block text-[13px] opacity-85">{masaPreview ? 'תצוגה מקדימה למנהלים · נפתח לכולם ב־4.10 בערב' : 'כל הטיול על המפה, מההמראה ועד התמונה המשותפת'}</span></span>
+            <span className="rounded-full bg-[#D34838] px-3 py-1.5 text-[14px] font-bold">צפייה</span>
+          </button>
+        </div>
+      )}
       {onWrapped && (
         <div className="px-4 pb-3">
           <button className="flex w-full items-center gap-3 rounded-2xl bg-gradient-to-l from-[#1768B0] via-[#B8467A] to-[#D34838] p-3.5 text-start text-white shadow-card" onClick={onWrapped}>

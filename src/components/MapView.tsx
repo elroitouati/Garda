@@ -52,7 +52,7 @@ function personHTML(p: MapPerson, size: number) {
 maplibregl.setWorkerUrl(workerUrl)
 
 // MapLibre + OpenFreeMap: חינמי, בלי חשבון ובלי מפתח
-const STYLE = 'https://tiles.openfreemap.org/styles/positron'
+export const STYLE = 'https://tiles.openfreemap.org/styles/positron'
 const MONIGA = { lng: 10.5357, lat: 45.5362 }
 const dark = () => window.matchMedia('(prefers-color-scheme: dark)').matches
 const cssVar = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim()
