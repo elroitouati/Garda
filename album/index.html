@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#FAF5EA">
+<title>טואטי בגארדה · האלבום</title>
+<link rel="icon" href="../pwa-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700&family=Secular+One&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.umd.js" defer></script>
+<style>
+  :root {
+    --paper: #FAF5EA; --sand: #F1EADB; --white: #FFFDF7; --ink: #16263F; --ink-2: rgba(22,38,63,.68); --ink-3: rgba(22,38,63,.45);
+    --line: rgba(22,38,63,.10); --red: #D34838; --blue: #1768B0; --lemon: #F2C230;
+    --safe-t: env(safe-area-inset-top, 0px); --safe-b: env(safe-area-inset-bottom, 0px);
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.55 Assistant, system-ui, sans-serif; }
+  button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+  img { display: block; max-width: 100%; }
+  .tnum { font-variant-numeric: tabular-nums; }
+  .display { font-family: 'Secular One', Assistant, sans-serif; font-weight: 400; }
+
+  header { position: relative; overflow: hidden; padding: calc(var(--safe-t) + 28px) 20px 22px; background: linear-gradient(#F6DDB8, var(--paper)); }
+  .hero { display: flex; align-items: flex-end; gap: 16px; max-width: 980px; margin: 0 auto; }
+  .postcard { width: 74px; flex: none; padding: 5px 5px 13px; background: var(--white); border-radius: 4px; rotate: -4deg; box-shadow: 0 12px 24px -12px rgba(22,38,63,.5); }
+  .postcard img { aspect-ratio: 4/5; width: 100%; object-fit: cover; border-radius: 2px; }
+  .eyebrow { font-size: 14px; font-weight: 700; color: var(--red); }
+  h1 { margin: 2px 0 0; font-size: clamp(30px, 8vw, 44px); line-height: 1.1; }
+  h1 span { color: var(--blue); }
+  .sub { color: var(--ink-2); font-size: 16px; }
+
+  .bar { position: sticky; top: 0; z-index: 5; background: rgba(250,245,234,.92); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding: 10px 16px; max-width: 980px; margin: 0 auto; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip { flex: none; min-height: 38px; padding: 0 14px; border-radius: 999px; background: var(--sand); font-weight: 600; font-size: 15px; white-space: nowrap; }
+  .chip[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+
+  main { max-width: 980px; margin: 0 auto; padding: 4px 0 calc(var(--safe-b) + 110px); }
+  .day h2 { display: flex; align-items: baseline; gap: 10px; margin: 0; padding: 22px 16px 10px; font-size: 22px; line-height: 1.2; }
+  .day h2 small { font: 600 14px Assistant, sans-serif; color: var(--ink-3); }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; padding: 0 3px; }
+  @media (min-width: 640px) { .grid { grid-template-columns: repeat(5, 1fr); gap: 4px; padding: 0 16px; } }
+  .tile { position: relative; aspect-ratio: 1; overflow: hidden; background: var(--sand); padding: 0; }
+  .tile img { width: 100%; height: 100%; object-fit: cover; transition: transform .25s cubic-bezier(.2,0,0,1); }
+  .tile:active img { transform: scale(.97); }
+  .badge { position: absolute; bottom: 6px; inset-inline-start: 6px; display: flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 999px; background: rgba(22,38,63,.72); color: #fff; font-size: 12px; font-weight: 700; }
+  .badge svg { width: 11px; height: 11px; fill: currentColor; }
+
+  .fab { position: fixed; z-index: 10; inset-inline: 16px; bottom: calc(var(--safe-b) + 16px); max-width: 420px; margin: 0 auto; min-height: 58px; border-radius: 18px; background: var(--red); color: #fff; font-size: 19px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 14px 30px -12px rgba(211,72,56,.75); }
+  .fab[hidden] { display: none; }
+  .fab svg { width: 22px; height: 22px; }
+  .fab:focus-visible, .chip:focus-visible, .tile:focus-visible, .lb button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+  .state { text-align: center; padding: 64px 24px; color: var(--ink-2); }
+  .state b { display: block; color: var(--ink); font-size: 20px; margin-bottom: 4px; }
+  .skel { aspect-ratio: 1; background: linear-gradient(90deg, var(--sand), #EDE4D2, var(--sand)); background-size: 200% 100%; animation: sh 1.4s infinite linear; }
+  @keyframes sh { to { background-position: -200% 0; } }
+
+  /* מסך מלא */
+  .lb { position: fixed; inset: 0; z-index: 30; background: #0E1626; color: #fff; display: flex; flex-direction: column; }
+  .lb[hidden] { display: none; }
+  .lb-top { display: flex; align-items: center; gap: 8px; padding: calc(var(--safe-t) + 8px) 10px 8px; }
+  .lb-top .who { flex: 1; min-width: 0; font-size: 15px; line-height: 1.3; }
+  .lb-top .who small { display: block; opacity: .65; font-size: 13px; }
+  .ib { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 999px; background: rgba(255,255,255,.1); }
+  .ib svg { width: 22px; height: 22px; }
+  .stage { position: relative; flex: 1; min-height: 0; touch-action: pan-y; }
+  .stage img, .stage video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+  .nav { position: absolute; top: 50%; translate: 0 -50%; width: 48px; height: 48px; display: none; place-items: center; border-radius: 999px; background: rgba(255,255,255,.12); }
+  @media (hover: hover) { .nav { display: grid; } }
+  .nav.prev { right: 12px; } .nav.next { left: 12px; }
+  .lb-bottom { padding: 8px 16px calc(var(--safe-b) + 12px); text-align: center; font-size: 13px; opacity: .6; }
+
+  /* גיליון */
+  .scrim { position: fixed; inset: 0; z-index: 40; background: rgba(14,22,38,.45); display: flex; align-items: flex-end; justify-content: center; }
+  .scrim[hidden] { display: none; }
+  .sheet { width: 100%; max-width: 520px; background: var(--paper); border-radius: 26px 26px 0 0; padding: 22px 20px calc(var(--safe-b) + 22px); animation: up .32s cubic-bezier(.16,1,.3,1); }
+  @keyframes up { from { transform: translateY(100%); } }
+  .sheet h3 { margin: 0; font-size: 24px; line-height: 1.2; }
+  .sheet p { margin: 4px 0 16px; color: var(--ink-2); }
+  .people { display: flex; flex-wrap: wrap; gap: 8px; }
+  .person { min-height: 44px; padding: 0 16px 0 10px; border-radius: 999px; background: var(--white); box-shadow: inset 0 0 0 1.5px var(--line); display: flex; align-items: center; gap: 8px; font-weight: 600; }
+  .person i { width: 24px; height: 24px; border-radius: 999px; display: grid; place-items: center; font-style: normal; color: #fff; font-size: 12px; font-weight: 700; }
+  .progress { height: 8px; border-radius: 999px; background: var(--sand); overflow: hidden; margin: 14px 0 8px; }
+  .progress div { height: 100%; width: 0; background: var(--red); border-radius: 999px; transition: width .3s; }
+  .btn2 { width: 100%; min-height: 50px; border-radius: 14px; background: var(--ink); color: var(--paper); font-weight: 700; font-size: 17px; margin-top: 14px; }
+  .who-now { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; font-size: 14px; color: var(--ink-2); }
+  .who-now button { color: var(--blue); font-weight: 700; min-height: 44px; }
+  @media (prefers-reduced-motion: reduce) { .sheet { animation: none; } .skel { animation: none; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="hero">
+    <div class="postcard"><img src="../journey/cover.jpg" alt=""></div>
+    <div>
+      <div class="eyebrow"><bdi dir="ltr">27.9 – 4.10.2026</bdi> · אגם גארדה</div>
+      <h1 class="display">טואטי <span>בגארדה</span></h1>
+      <div class="sub" id="count">האלבום המשפחתי</div>
+    </div>
+  </div>
+</header>
+<div class="bar"><div class="chips" id="chips" role="toolbar" aria-label="סינון לפי מי צילם"></div></div>
+<main id="main" aria-live="polite">
+  <div class="grid" style="padding-top:16px">
+    <div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div>
+    <div class="skel"></div><div class="skel"></div><div class="skel"></div>
+  </div>
+</main>
+<button class="fab" id="add" hidden>
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+  הוספת תמונות וסרטונים
+</button>
+<input type="file" id="file" accept="image/*,video/*" multiple hidden>
+
+<div class="lb" id="lb" hidden role="dialog" aria-modal="true" aria-label="תמונה במסך מלא">
+  <div class="lb-top">
+    <button class="ib" id="lbClose" aria-label="סגירה"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <div class="who" id="lbWho"></div>
+    <a class="ib" id="lbDown" aria-label="הורדה" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></a>
+  </div>
+  <div class="stage" id="stage">
+    <button class="nav prev" id="prev" aria-label="הקודמת"><svg viewBox="0 0 24 24" width="24" fill="none" stroke="#fff" stroke-width="2.4"><path d="M9 6l6 6-6 6"/></svg></button>
+    <button class="nav next" id="next" aria-label="הבאה"><svg viewBox="0 0 24 24" width="24" fill="none" stroke="#fff" stroke-width="2.4"><path d="M15 6l-6 6 6 6"/></svg></button>
+  </div>
+  <div class="lb-bottom tnum" id="lbPos" dir="ltr"></div>
+</div>
+
+<div class="scrim" id="scrim" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" id="sheet"></div>
+</div>
+
+<script>
+(() => {
+  const FN = 'https://ermctpnbnyobwvxjzqgx.supabase.co/functions/v1/album'
+  const key = new URLSearchParams(location.search).get('k') || ''
+  const $ = (id) => document.getElementById(id)
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
+  const store = { get: (k) => { try { return localStorage.getItem(k) } catch { return null } }, set: (k, v) => { try { localStorage.setItem(k, v) } catch {} } }
+  const WD = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳']
+  const romeDay = (iso) => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+  const dayLabel = (d) => { const [y, m, dd] = d.split('-').map(Number); return { wd: WD[new Date(Date.UTC(y, m - 1, dd)).getUTCDay()], short: `${dd}.${m}` } }
+  const time = (iso) => new Date(iso).toLocaleTimeString('he-IL', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' })
+  const dur = (s) => s ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}` : ''
+  const PLAY = '<svg viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg>'
+
+  let data = null, who = null, shown = [], cur = -1
+
+  async function load() {
+    if (!key) return fail('הקישור לא שלם', 'בקשו את הקישור המלא מאלרואי.')
+    try {
+      const r = await fetch(`${FN}?a=list&k=${encodeURIComponent(key)}`)
+      if (r.status === 403) return fail('הקישור לא תקין', 'בקשו את הקישור המלא מאלרואי.')
+      if (!r.ok) throw 0
+      data = await r.json()
+      $('add').hidden = false
+      render()
+    } catch (e) { console.error(e); fail('לא הצלחנו לטעון את האלבום', 'בדקו את החיבור לאינטרנט ונסו לרענן.') }
+  }
+  function fail(t, s) { $('main').innerHTML = `<div class="state"><b>${esc(t)}</b>${esc(s)}</div>` }
+
+  const member = (id) => data.members.find((m) => m.id === id)
+  function render() {
+    const ph = data.photos
+    const v = ph.filter((p) => p.kind === 'video').length
+    $('count').textContent = `${ph.length - v} תמונות · ${v} סרטונים`
+    // סינון לפי מי צילם
+    const by = new Map(); ph.forEach((p) => by.set(p.member_id, (by.get(p.member_id) || 0) + 1))
+    $('chips').innerHTML = [`<button class="chip" aria-pressed="${!who}" data-w="">כולם <span class="tnum" style="opacity:.6">${ph.length}</span></button>`]
+      .concat(data.members.filter((m) => by.get(m.id)).map((m) => `<button class="chip" aria-pressed="${who === m.id}" data-w="${esc(m.id)}">${esc(m.name)} <span class="tnum" style="opacity:.6">${by.get(m.id)}</span></button>`)).join('')
+    shown = ph.filter((p) => !who || p.member_id === who)
+    if (!shown.length) { $('main').innerHTML = '<div class="state"><b>עוד אין כאן תמונות</b>לחצו על "הוספת תמונות" למטה.</div>'; return }
+    const days = new Map(); shown.forEach((p, i) => { const d = romeDay(p.taken_at); if (!days.has(d)) days.set(d, []); days.get(d).push(i) })
+    const titles = new Map((data.days || []).map((d) => [d.date, d.title]))
+    $('main').innerHTML = [...days.entries()].map(([d, idx]) => {
+      const l = dayLabel(d)
+      return `<section class="day"><h2 class="display">${esc(titles.get(d) || 'יום ' + l.wd)} <small>יום ${l.wd} · <bdi class="tnum">${l.short}</bdi> · <bdi class="tnum">${idx.length}</bdi></small></h2><div class="grid">` +
+        idx.map((i) => { const p = shown[i]; return `<button class="tile" data-i="${i}" aria-label="${p.kind === 'video' ? 'סרטון' : 'תמונה'} של ${esc(member(p.member_id)?.name || '')}"><img loading="lazy" src="${esc(p.thumb || '')}" alt="">${p.kind === 'video' ? `<span class="badge">${PLAY}<bdi class="tnum">${dur(p.duration)}</bdi></span>` : ''}</button>` }).join('') + '</div></section>'
+    }).join('')
+  }
+  $('chips').addEventListener('click', (e) => { const b = e.target.closest('.chip'); if (!b) return; who = b.dataset.w || null; render(); scrollTo({ top: $('main').offsetTop - 60, behavior: 'smooth' }) })
+  $('main').addEventListener('click', (e) => { const t = e.target.closest('.tile'); if (t) open(+t.dataset.i) })
+
+  // ── מסך מלא ──
+  function open(i) {
+    cur = (i + shown.length) % shown.length
+    const p = shown[cur], m = member(p.member_id)
+    const stage = $('stage'); stage.querySelectorAll('img,video').forEach((n) => n.remove())
+    const el = document.createElement(p.kind === 'video' ? 'video' : 'img')
+    if (p.kind === 'video') { el.controls = true; el.playsInline = true; el.autoplay = true; el.poster = p.thumb || '' }
+    el.src = p.full || p.thumb || ''; el.alt = ''
+    stage.prepend(el)
+    $('lbWho').innerHTML = `<b>${esc(m?.name || '')}</b><small>יום ${dayLabel(romeDay(p.taken_at)).wd} · <bdi class="tnum">${dayLabel(romeDay(p.taken_at)).short}</bdi> · <bdi class="tnum">${time(p.taken_at)}</bdi></small>`
+    $('lbDown').href = p.download || p.full || '#'
+    $('lbPos').textContent = `${cur + 1} / ${shown.length}`
+    if ($('lb').hidden) { $('lb').hidden = false; document.body.style.overflow = 'hidden'; history.pushState({ lb: 1 }, '') }
+  }
+  function close() { $('lb').hidden = true; document.body.style.overflow = ''; $('stage').querySelectorAll('video').forEach((v) => v.pause()) }
+  $('lbClose').onclick = () => history.back()
+  addEventListener('popstate', () => { if (!$('lb').hidden) close() })
+  $('next').onclick = () => open(cur + 1); $('prev').onclick = () => open(cur - 1)
+  addEventListener('keydown', (e) => { if ($('lb').hidden) return; if (e.key === 'ArrowLeft') open(cur + 1); else if (e.key === 'ArrowRight') open(cur - 1); else if (e.key === 'Escape') history.back() })
+  let sx = null
+  $('stage').addEventListener('touchstart', (e) => { sx = e.touches[0].clientX }, { passive: true })
+  $('stage').addEventListener('touchend', (e) => { if (sx == null) return; const dx = e.changedTouches[0].clientX - sx; sx = null; if (Math.abs(dx) > 50) open(cur + (dx > 0 ? 1 : -1)) })
+
+  // ── העלאה ──
+  const sheet = (html) => { $('sheet').innerHTML = html; $('scrim').hidden = false }
+  const hideSheet = () => { $('scrim').hidden = true }
+  $('scrim').addEventListener('click', (e) => { if (e.target === $('scrim') && !busy) hideSheet() })
+  let busy = false
+  function pickWho(then) {
+    sheet(`<h3 id="sheetTitle" class="display">מי מעלה?</h3><p>כדי שנדע של מי התמונות. נזכור את זה לפעם הבאה.</p><div class="people">` +
+      data.members.map((m) => `<button class="person" data-id="${esc(m.id)}"><i style="background:${esc(m.color)}">${esc(m.name[0])}</i>${esc(m.name)}</button>`).join('') + '</div>')
+    $('sheet').querySelectorAll('.person').forEach((b) => b.onclick = () => { store.set('garda-album-who', b.dataset.id); hideSheet(); then() })
+  }
+  $('add').onclick = () => {
+    const me = store.get('garda-album-who')
+    if (!me || !member(me)) return pickWho(() => $('file').click())
+    $('file').click()
+  }
+  $('file').onchange = async (e) => {
+    const files = [...e.target.files]; e.target.value = ''
+    if (!files.length) return
+    const me = store.get('garda-album-who')
+    busy = true
+    let done = 0, failed = 0
+    const draw = () => sheet(`<h3 id="sheetTitle" class="display">מעלים לאלבום…</h3><p class="tnum">${done + failed} מתוך ${files.length}${failed ? ` · ${failed} לא עלו` : ''}</p><div class="progress"><div style="width:${((done + failed) / files.length) * 100}%"></div></div><div class="who-now"><span>מעלה בשם <b>${esc(member(me)?.name || '')}</b></span></div>`)
+    draw()
+    for (const f of files) {
+      try { await upload(f, me); done++ } catch (err) { console.warn(err); failed++ }
+      draw()
+    }
+    busy = false
+    sheet(`<h3 id="sheetTitle" class="display">${done ? 'עלה לאלבום! 🎉' : 'ההעלאה לא הצליחה'}</h3><p class="tnum">${done ? `${done} ${done === 1 ? 'פריט עלה' : 'פריטים עלו'}` : ''}${failed ? `${done ? ' · ' : ''}${failed} לא עלו (אולי קובץ גדול מדי או בלי קליטה)` : ''}</p>` +
+      `<button class="btn2" id="ok">סיום</button><div class="who-now"><span>מעלה בשם <b>${esc(member(me)?.name || '')}</b></span><button id="chg">לא אני</button></div>`)
+    $('ok').onclick = hideSheet
+    $('chg').onclick = () => pickWho(hideSheet)
+    load()
+  }
+
+  async function upload(file, me) {
+    const video = file.type.startsWith('video/')
+    let meta = { taken_at: new Date(file.lastModified || Date.now()).toISOString() }, full, thumb
+    if (video) {
+      const v = await videoInfo(file)
+      full = file; thumb = v.thumb; Object.assign(meta, { width: v.w, height: v.h, duration: v.d })
+    } else {
+      try {
+        const x = window.exifr ? await exifr.parse(file, { gps: true, pick: ['DateTimeOriginal', 'latitude', 'longitude'] }) : null
+        if (x?.DateTimeOriginal instanceof Date) meta.taken_at = x.DateTimeOriginal.toISOString()
+        if (typeof x?.latitude === 'number') { meta.lat = x.latitude; meta.lng = x.longitude }
+      } catch {}
+      const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' })
+      full = await jpeg(bmp, 2400, .86); thumb = await jpeg(bmp, 480, .8)
+      meta.width = bmp.width; meta.height = bmp.height
+      bmp.close?.()
+    }
+    const s = await post({ a: 'start', member_id: me, type: video ? file.type : 'image/jpeg' })
+    if (!s.id) throw new Error(s.error || 'start')
+    await put(s.full, full); await put(s.thumb, thumb)
+    const c = await post({ a: 'commit', id: s.id, member_id: me, kind: video ? 'video' : 'photo', ...meta })
+    if (!c.ok) throw new Error(c.error || 'commit')
+  }
+  const post = (b) => fetch(FN, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ k: key, ...b }) }).then((r) => r.json())
+  async function put(url, blob) {
+    const fd = new FormData(); fd.append('cacheControl', '31536000'); fd.append('', blob)
+    const r = await fetch(url, { method: 'PUT', body: fd, headers: { 'x-upsert': 'false' } })
+    if (!r.ok) throw new Error('upload ' + r.status)
+  }
+  function jpeg(bmp, max, q) {
+    const k = Math.min(1, max / Math.max(bmp.width, bmp.height))
+    const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k)
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height)
+    return new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error('jpeg'))), 'image/jpeg', q))
+  }
+  function videoInfo(file) {
+    return new Promise((res) => {
+      const v = document.createElement('video'), u = URL.createObjectURL(file)
+      v.muted = true; v.playsInline = true; v.preload = 'auto'; v.src = u
+      const fallback = async () => { const c = document.createElement('canvas'); c.width = 480; c.height = 480; const g = c.getContext('2d'); g.fillStyle = '#16263F'; g.fillRect(0, 0, 480, 480); g.fillStyle = '#fff'; g.beginPath(); g.moveTo(200, 160); g.lineTo(330, 240); g.lineTo(200, 320); g.fill(); const b = await new Promise((r) => c.toBlob(r, 'image/jpeg', .8)); URL.revokeObjectURL(u); res({ thumb: b, w: null, h: null, d: isFinite(v.duration) ? Math.round(v.duration) : null }) }
+      const t = setTimeout(fallback, 8000)
+      v.onloadeddata = () => { v.currentTime = Math.min(0.5, (v.duration || 1) / 2) }
+      v.onseeked = async () => {
+        clearTimeout(t)
+        try {
+          const k = Math.min(1, 480 / Math.max(v.videoWidth, v.videoHeight)), c = document.createElement('canvas')
+          c.width = Math.round(v.videoWidth * k); c.height = Math.round(v.videoHeight * k)
+          c.getContext('2d').drawImage(v, 0, 0, c.width, c.height)
+          const b = await new Promise((r) => c.toBlob(r, 'image/jpeg', .8))
+          URL.revokeObjectURL(u); res({ thumb: b, w: v.videoWidth, h: v.videoHeight, d: Math.round(v.duration) })
+        } catch { fallback() }
+      }
+      v.onerror = () => { clearTimeout(t); fallback() }
+    })
+  }
+
+  load()
+})()
+</script>
+</body>
+</html>
